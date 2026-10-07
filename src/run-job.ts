@@ -126,6 +126,7 @@ export async function runAchievementJob(input: RunAchievementInput): Promise<Ach
     contentPath: relativePath,
     claims,
     writtenPaths: [relativePath],
+    riskTier: "L2",
   })
   return { doc, job, relativePath, payload, preview }
 }
@@ -182,6 +183,7 @@ export async function runColumnJob(input: RunColumnInput): Promise<ColumnRun> {
     contentPath: relativePath,
     claims,
     writtenPaths: [relativePath],
+    riskTier: "L2",
   })
   return { doc, job, relativePath, payload, preview }
 }
@@ -331,7 +333,7 @@ function assertSameIds(expected: string[], actual: string[]): void {
   if (left !== right) throw new HarnessError("C07", "image ids do not match the human input")
 }
 
-function achievementSources(facts: AchievementFacts, pack: SitePack, claims: ClaimDraft[]): string {
+export function achievementSources(facts: AchievementFacts, pack: SitePack, claims: ClaimDraft[]): string {
   const parts: string[] = [facts.challenge, facts.outcome, ...facts.scopeNotes]
   if (facts.clientPurpose) parts.push(facts.clientPurpose)
   if (facts.origin) {
@@ -384,7 +386,7 @@ function requireClaim(pack: SitePack, id: string): string {
   return claim.text
 }
 
-function numberClaims(preview: string, sources: string): JobClaim[] {
+export function numberClaims(preview: string, sources: string): JobClaim[] {
   return unsourcedNumbers(preview, sources).map((token, index) => ({
     id: `c12-${token.replaceAll(".", "-")}-${index}`,
     text: `数値 ${token} の出典が facts / brief / claims / verified-claims にない`,
