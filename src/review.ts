@@ -24,11 +24,13 @@ export type JobClaim = {
 
 export type JobRecord = {
   jobId: string
-  recipe: "achievement" | "column"
+  recipe: "achievement" | "column" | "text_edit"
   requestedBy: string
   contentPath: string
   claims: JobClaim[]
   writtenPaths: string[]
+  /** L1 は技術確認を要求しない。主張が1件でもあれば、その確認はどちらでも必須。 */
+  riskTier: "L1" | "L2"
 }
 
 export function hashText(text: string): string {
@@ -99,7 +101,9 @@ export function evaluateMerge(input: {
     failures.push("C18: requester approval is not from the requester")
   }
 
-  if (input.job.claims.length === 0) failures.push("C17: no technical claims to review")
+  if (input.job.riskTier === "L2" && input.job.claims.length === 0) {
+    failures.push("C17: no technical claims to review")
+  }
 
   for (const claim of input.job.claims) {
     if (claim.status !== "ok") {

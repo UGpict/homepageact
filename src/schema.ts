@@ -286,6 +286,42 @@ export const ColumnModelOutput = z
   })
   .strict()
 
+/** 既存ページの修正。slug も facts も返させない。 */
+export const TextEditOutput = z
+  .object({
+    title: z.string().min(1).optional(),
+    h1: z.string().min(1).optional(),
+    shortTitle: z.string().min(1).optional(),
+    listingSummary: z.string().min(1).optional(),
+    lead: z.string().min(1).optional(),
+    description: z.string().min(1).optional(),
+    ogImageAlt: z.string().min(1).optional(),
+    solutionHeadline: z.string().min(1).optional(),
+    solutionBody: z.string().min(1).optional(),
+    points: z
+      .array(
+        z
+          .object({
+            stepId: StepId,
+            title: z.string().min(1),
+            blocks: z.array(Block),
+          })
+          .strict(),
+      )
+      .optional(),
+    images: z.array(ImageCopy).optional(),
+  })
+  .strict()
+
+/** 技術確認の修正は、指定した Point だけ。 */
+export const SectionRewriteOutput = z
+  .object({
+    stepId: StepId,
+    title: z.string().min(1),
+    blocks: z.array(Block),
+  })
+  .strict()
+
 export const PublicMeta = z
   .object({
     id: z.string().min(1),
@@ -300,6 +336,14 @@ export const PublicMeta = z
   })
   .strict()
 
+export const PublicAchievementSchema = z
+  .object({
+    meta: PublicMeta,
+    facts: AchievementFacts,
+    generated: AchievementModelOutput.omit({ claims: true }),
+  })
+  .strict()
+
 export type PageRef = z.infer<typeof PageRef>
 export type Block = z.infer<typeof Block>
 export type Tags = z.infer<typeof Tags>
@@ -311,6 +355,8 @@ export type OutlineSection = z.infer<typeof OutlineSection>
 export type ColumnModelOutput = z.infer<typeof ColumnModelOutput>
 export type ClaimDraft = z.infer<typeof ClaimDraft>
 export type PublicMeta = z.infer<typeof PublicMeta>
+export type TextEditOutput = z.infer<typeof TextEditOutput>
+export type SectionRewriteOutput = z.infer<typeof SectionRewriteOutput>
 
 export type AchievementGenerated = Omit<AchievementModelOutput, "claims">
 export type ColumnGenerated = Omit<ColumnModelOutput, "claims">

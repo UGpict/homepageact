@@ -3,6 +3,7 @@ import path from "node:path"
 import { ApprovalStore } from "./approval.ts"
 import { HarnessError } from "./errors.ts"
 import { evaluateMerge } from "./review.ts"
+import { writePublicImage } from "./images.ts"
 import { runAchievementJob } from "./run-job.ts"
 import { loadSitePack } from "./sitepack.ts"
 
@@ -32,6 +33,24 @@ async function main(): Promise<void> {
     writeFileSync(previewPath, result.preview + "\n")
     console.log(result.relativePath)
     console.log(previewPath)
+    return
+  }
+
+  if (command === "prepare-image") {
+    const file = required(args, "--file")
+    const kind = flag(args, "--kind") ?? "achievement"
+    if (kind !== "achievement" && kind !== "column") {
+      throw new HarnessError("C22", "kind must be achievement or column")
+    }
+    const root = flag(args, "--root") ?? "out"
+    const written = await writePublicImage({
+      root,
+      pack: loadSitePack(repoRoot),
+      kind,
+      sourceName: file,
+      bytes: readFileSync(file),
+    })
+    console.log(written.relativePath)
     return
   }
 
