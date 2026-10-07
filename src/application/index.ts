@@ -1,6 +1,6 @@
 export { harnessErrorToHuman, inputError } from "./errors.ts"
 export { buildAchievementFacts } from "./form.ts"
-export { pagePreview, phaseOf, presentClaim, toJobView } from "./job-view.ts"
+export { phaseOf, presentClaim, toJobView } from "./job-view.ts"
 export {
   httpGenerationProvider,
   mockAchievementProvider,
@@ -29,4 +29,4 @@ export type {
   UserRole,
 } from "./types.ts"
 export { currentUserFromEnv } from "./user.ts"
-export type { JobView, PagePreview, PresentedClaim, PreviewSection } from "./job-view.ts"
+export type { JobView, PresentedClaim } from "./job-view.ts"

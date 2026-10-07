@@ -1,4 +1,5 @@
 import Link from "next/link"
+import type { PublishedBlock, PublishedImage } from "../../../src/render.ts"
 import type { JobView } from "sitebot/application"
 
 export function JobPreview({ job, requesterLabel }: { job: JobView; requesterLabel: string }) {
@@ -15,6 +16,10 @@ export function JobPreview({ job, requesterLabel }: { job: JobView; requesterLab
       <div className="review-layout">
         <article className="preview panel">
           <p className="eyebrow">完成イメージ</p>
+          <p className="published-title">
+            <span>ページタイトル</span>
+            {preview.title}
+          </p>
           <h1>{preview.heading}</h1>
           <p className="lead">{preview.lead}</p>
           {preview.tags.length > 0 ? (
@@ -42,21 +47,15 @@ export function JobPreview({ job, requesterLabel }: { job: JobView; requesterLab
             {preview.solutionBody ? <p className="preserve">{preview.solutionBody}</p> : null}
           </section>
           {preview.openingImages.map((image) => (
-            <figure key={image.file}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={`/api/images/${image.file}`} alt={image.alt} />
-              <figcaption>{image.caption}</figcaption>
-            </figure>
+            <Figure key={image.file} image={image} />
           ))}
           {preview.sections.map((section, index) => (
             <section key={`${section.title}-${index}`}>
               <h2>
                 工程 {index + 1}. {section.title}
               </h2>
-              {section.paragraphs.map((paragraph, paragraphIndex) => (
-                <p className="preserve" key={`${paragraphIndex}-${paragraph.slice(0, 12)}`}>
-                  {paragraph}
-                </p>
+              {section.blocks.map((block, blockIndex) => (
+                <BlockView key={blockIndex} block={block} />
               ))}
               {section.items.length > 0 ? (
                 <ul>
@@ -75,16 +74,7 @@ export function JobPreview({ job, requesterLabel }: { job: JobView; requesterLab
                 <p key={note}>※{note}</p>
               ))}
               {section.images.map((image) => (
-                <figure key={image.file}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={`/api/images/${image.file}`} alt={image.alt} />
-                  <figcaption>
-                    {image.caption}
-                    {image.substituteNote ? `（${image.substituteNote}）` : ""}
-                    {image.scaleBars.length > 0 ? ` ${image.scaleBars.join(" / ")}` : ""}
-                    {image.legend ? ` ${image.legend}` : ""}
-                  </figcaption>
-                </figure>
+                <Figure key={image.file} image={image} />
               ))}
             </section>
           ))}
@@ -95,11 +85,28 @@ export function JobPreview({ job, requesterLabel }: { job: JobView; requesterLab
           {preview.notes.map((note) => (
             <p key={note}>※{note}</p>
           ))}
+          {preview.statements.map((statement) => (
+            <p key={statement}>{statement}</p>
+          ))}
+          <details className="published-extra" open>
+            <summary>公開されるその他の内容（{preview.reviewRows.length}件）</summary>
+            <p className="hint">ここに並ぶ文章も、ページと一緒に公開されます。</p>
+            <dl>
+              {preview.reviewRows.map((row, index) => (
+                <div key={`${row.label}-${index}`}>
+                  <dt>{row.label}</dt>
+                  <dd className="preserve">{row.text}</dd>
+                </div>
+              ))}
+            </dl>
+          </details>
           <p className="meta">依頼者: {requesterLabel}</p>
         </article>
         <aside className="claims panel">
           <h2>技術確認</h2>
-          {job.pendingCount > 0 ? (
+          {job.phase === "UNREVIEWABLE" ? (
+            <p className="pending-count">技術確認の対象が見つからないため、この下書きは公開できません。</p>
+          ) : job.pendingCount > 0 ? (
             <p className="pending-count">{job.pendingCount}件確認待ち</p>
           ) : (
             <p>確認待ちの項目はありません。</p>
@@ -135,5 +142,52 @@ export function JobPreview({ job, requesterLabel }: { job: JobView; requesterLab
         </aside>
       </div>
     </div>
+  )
+}
+
+function Figure({ image }: { image: PublishedImage }) {
+  return (
+    <figure>
+      <img src={`/api/images/${image.file}`} alt={image.alt} />
+      <figcaption>
+        {image.caption}
+        {image.substituteNote ? `（${image.substituteNote}）` : ""}
+        {image.scaleBars.length > 0 ? ` ${image.scaleBars.join(" / ")}` : ""}
+        {image.legend ? ` ${image.legend}` : ""}
+      </figcaption>
+    </figure>
+  )
+}
+
+function BlockView({ block }: { block: PublishedBlock }) {
+  if (block.type === "p") return <p className="preserve">{block.text}</p>
+  if (block.type === "table") {
+    return (
+      <table>
+        <thead>
+          <tr>
+            {block.head.map((cell) => (
+              <th key={cell}>{cell}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {block.rows.map((row, index) => (
+            <tr key={index}>
+              {row.map((cell, cellIndex) => (
+                <td key={cellIndex}>{cell}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    )
+  }
+  if (block.type === "image") return <Figure image={block.image} />
+  return (
+    <p>
+      リンク: {block.label}
+      {block.kind ? <small> {block.slug}</small> : null}
+    </p>
   )
 }

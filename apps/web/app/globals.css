@@ -188,6 +188,44 @@ button:disabled { background: #9aa6b5; border-color: #9aa6b5; cursor: not-allowe
   background: #eef4fa;
 }
 
+.status-UNREVIEWABLE {
+  border-color: #8c2f2f;
+  background: #fdf2f2;
+}
+
+.published-title {
+  margin: 0 0 12px;
+  padding: 8px 10px;
+  background: #f8fafc;
+  border: 1px solid #d5d9e0;
+  border-radius: 6px;
+}
+
+.published-title span,
+.published-extra dt {
+  display: block;
+  color: #526072;
+  font-size: 0.85rem;
+}
+
+.published-extra {
+  margin-top: 20px;
+  border-top: 1px solid #e4e7ec;
+  padding-top: 12px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0 16px;
+}
+
+th, td {
+  border: 1px solid #d5d9e0;
+  padding: 6px 8px;
+  text-align: left;
+}
+
 .review-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) minmax(260px, 0.8fr);

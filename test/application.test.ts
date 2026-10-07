@@ -12,12 +12,19 @@ import {
   harnessErrorToHuman,
   httpGenerationProvider,
   mockAchievementProvider,
+  phaseOf,
   prepareAchievementImage,
   type AppContext,
   type GenerationProvider,
 } from "../src/application/index.ts"
 import { HarnessError } from "../src/errors.ts"
-import { AchievementFacts } from "../src/schema.ts"
+import {
+  presentAchievement,
+  renderAchievement,
+  renderAchievementPresentation,
+  type AchievementPresentation,
+} from "../src/render.ts"
+import { AchievementFacts, PublicAchievementSchema } from "../src/schema.ts"
 import { loadSitePack } from "../src/sitepack.ts"
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
@@ -268,6 +275,102 @@ test("harness errors keep their code in the developer detail only", () => {
   assert.match(human.detail ?? "", /C20/)
   assert.doesNotMatch(`${human.title}${human.message}${human.next}`, /C20|HarnessError/)
 })
+
+test("an L2 draft with no claims is not presented as ready for requester review", async () => {
+  const root = dataRoot()
+  const image = await upload(root)
+  const provider: GenerationProvider = {
+    name: "empty-claims",
+    async generate(payload) {
+      const output = await mockAchievementProvider().generate(payload)
+      if (!output || typeof output !== "object") return output
+      return { ...output, claims: [] }
+    },
+  }
+  const draft = await createAchievementDraft(ctx(root, provider), form(image.id))
+  assert.equal(draft.ok, true)
+  if (!draft.ok) return
+  assert.equal(draft.job.phase, "UNREVIEWABLE")
+  assert.equal(draft.job.phaseLabel, "技術確認対象を特定できませんでした")
+  assert.match(draft.job.phaseNote, /公開できません/)
+  assert.match(draft.job.phaseNote, /下書きを作り直してください/)
+  assert.equal(draft.job.claims.length, 0)
+  assert.equal(phaseOf({ riskTier: "L1", recipe: "text_edit", claims: [] }, pack), "REQUESTER_REVIEW")
+  assertPreviewCoversRender(root, draft.job.preview)
+})
+
+test("the review model includes every published string, including title and faq", async () => {
+  const root = dataRoot()
+  const image = await upload(root)
+  const provider: GenerationProvider = {
+    name: "rich",
+    async generate(payload) {
+      const output = await mockAchievementProvider().generate(payload)
+      if (!output || typeof output !== "object" || !payload.facts) return output
+      const base = output as {
+        points: Array<{ stepId: string; title: string; blocks: unknown[] }>
+        images: Array<{ id: string; alt: string; caption: string }>
+      }
+      const imageId = payload.facts.images[0]?.id
+      return {
+        ...output,
+        title: "業界最高精度30μmを実現",
+        shortTitle: "高精度の実績",
+        listingSummary: "一覧用の説明文",
+        description: "検索結果に出る説明",
+        ogImageAlt: "共有画像の代替テキスト",
+        points: base.points.map((point, index) =>
+          index === 0
+            ? {
+                ...point,
+                blocks: [
+                  ...point.blocks,
+                  { type: "table", head: ["項目", "値"], rows: [["精度", "掲載表の値"]] },
+                  { type: "link", ref: { kind: "static", slug: "flow" }, label: "依頼の流れを見る" },
+                  { type: "image", ref: imageId },
+                ],
+              }
+            : point,
+        ),
+        relatedLinks: [
+          { ref: { kind: "static", slug: "flow" }, label: "依頼の流れ", sublabel: "相談から報告まで" },
+        ],
+        faq: [{ q: "対応できない条件は？", a: "構造によっては不可です。" }],
+      }
+    },
+  }
+  const draft = await createAchievementDraft(
+    ctx(root, provider),
+    form(image.id, { youtubeId: "abcdefghijk" }),
+  )
+  assert.equal(draft.ok, true)
+  if (!draft.ok) return
+  const rows = draft.job.preview.reviewRows.map((row) => `${row.label}:${row.text}`).join("\n")
+  assert.match(rows, /ページタイトル:業界最高精度30μmを実現/)
+  assert.match(rows, /短い名前:高精度の実績/)
+  assert.match(rows, /一覧の説明:一覧用の説明文/)
+  assert.match(rows, /検索結果の説明:検索結果に出る説明/)
+  assert.match(rows, /共有画像の説明:共有画像の代替テキスト/)
+  assert.match(rows, /関連リンク:依頼の流れ（相談から報告まで） static:flow/)
+  assert.match(rows, /質問:対応できない条件は？/)
+  assert.match(rows, /回答:構造によっては不可です。/)
+  assert.match(rows, /動画:abcdefghijk/)
+  const table = draft.job.preview.sections[0]?.blocks.find((block) => block.type === "table")
+  assert.equal(table?.type, "table")
+  if (table?.type === "table") assert.equal(table.rows[0]?.[1], "掲載表の値")
+  assert.equal(draft.job.phase, "TECHNICAL_REVIEW")
+  assertPreviewCoversRender(root, draft.job.preview)
+})
+
+function assertPreviewCoversRender(root: string, preview: AchievementPresentation): void {
+  const file = readdirSync(path.join(root, "content/achievements"))[0]
+  if (!file) throw new Error("missing achievement file")
+  const doc = PublicAchievementSchema.parse(
+    JSON.parse(readFileSync(path.join(root, "content/achievements", file), "utf8")),
+  )
+  assert.deepEqual(preview, presentAchievement(doc, pack))
+  assert.equal(renderAchievement(doc, pack), renderAchievementPresentation(preview))
+}
 
 test("http provider sends the key in the header and still returns harness-checked json", async () => {
   const root = dataRoot()
