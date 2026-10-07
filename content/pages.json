@@ -1,0 +1,10 @@
+[
+  { "kind": "static", "slug": "flow", "title": "依頼の流れ" },
+  { "kind": "static", "slug": "technical", "title": "技術詳細" },
+  { "kind": "static", "slug": "contact", "title": "お問い合わせ" },
+  { "kind": "achievement", "slug": "bga", "title": "アンダーフィル付きBGA" },
+  { "kind": "achievement", "slug": "mosfet-sic", "title": "MOSFET内部SiCチップ" },
+  { "kind": "achievement", "slug": "crimp", "title": "圧着端子" },
+  { "kind": "column", "slug": "crack", "title": "はんだクラックとは" },
+  { "kind": "column", "slug": "shrinkage-void", "title": "引け巣とは" }
+]

@@ -1,0 +1,22 @@
+- id: sac-vs-snpb-hardness
+  statement: Sn-Ag-Cu系鉛フリーはんだはSn-Pb共晶はんだより硬く脆い傾向がある
+  scope: 一般的な材料特性の比較
+  conditions: 組成・熱履歴により異なる
+  notFor:
+    - 特定製品の寿命予測の根拠
+  approvedExpressions:
+    - 鉛フリーはんだは共晶はんだより硬く脆い
+  tags: [solder, lead-free]
+  verifiedBy: 技術者A
+  verifiedAt: 2026-10-10
+  reviewAfter: 2027-10-10
+- id: expired-example
+  statement: 期限切れの確認済み知識は生成プロンプトに載せない
+  scope: テスト用
+  conditions: 期限切れ
+  notFor: []
+  approvedExpressions: []
+  tags: []
+  verifiedBy: 技術者A
+  verifiedAt: 2019-01-01
+  reviewAfter: 2020-01-01

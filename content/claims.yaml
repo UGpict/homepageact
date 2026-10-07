@@ -1,0 +1,13 @@
+# U10: 検証者と検証日は設計書の仮置き。運用前に確認する。
+veteran-20y:
+  text: 20年以上の経験を有する技術者が担当
+  verifiedBy: 伊藤大智
+  verifiedAt: 2026-10-07
+partner-reliability-tests:
+  text: 提携会社と連携し、引張試験・信頼性試験のデータ提供に対応
+  verifiedBy: 伊藤大智
+  verifiedAt: 2026-10-07
+offer-first-section-free:
+  text: 初回は1断面を無料で確認
+  verifiedBy: 伊藤大智
+  verifiedAt: 2026-10-07
