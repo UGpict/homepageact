@@ -1,6 +1,6 @@
 # sitebot
 
-TS部署サイトの更新を、モデルの善意ではなくハーネスで拘束するための実験実装です。実績とコラムの新規作成に加え、データファイル化されたページの文章修正、確認後の1セクションだけの書き直し、公開前の画像処理までを扱います。技術確認UI、メール、本番反映はまだありません。
+TS部署サイトの更新を、モデルの善意ではなくハーネスで拘束するための実験実装です。実績とコラムの新規作成に加え、データファイル化されたページの文章修正、確認後の1セクションだけの書き直し、公開前の画像処理までを扱います。ブラウザからは、実績ページの下書き作成とプレビュー、技術確認が必要な項目の表示までを行えます。ログイン、メール、本番反映、GitHubへのPR作成はまだありません。
 
 ## ハーネスが強制すること
 
@@ -17,11 +17,32 @@ TS部署サイトの更新を、モデルの善意ではなくハーネスで拘
 - 技術確認の書き直しは、指定した Point だけを差し替える。ほかの Point が変わっていたら失敗し、その Point の確認は `pending` に戻る。
 - 画像はデコードして WebP に変換し、EXIF / IPTC / XMP を落とし、ファイル名は内容のハッシュにする。元のファイル名は公開名に残さない。
 
+## 画面
+
+非エンジニア向けの入口は、自由な指示欄ではなく「実績を追加する」です。入力はフォームに限り、文章生成とファイル保存は既存のハーネスを通ります。APIキーが無いときは、入力内容から決まる下書き（mock）を使います。
+
+```bash
+npm install
+npm run dev
+```
+
+ブラウザで http://localhost:3000 を開きます。下書きと画像は `data/sitebot` に保存され、リポジトリには入りません。保存先を画面から指定することはできません。
+
+任意の環境変数:
+
+- `SITEBOT_PROVIDER` — 未設定または `mock`。`http` にすると外部の生成APIを呼びます。
+- `SITEBOT_GENERATION_URL` — `SITEBOT_PROVIDER=http` のとき必須。
+- `SITEBOT_GENERATION_API_KEY` — 生成APIへ Bearer で渡します。ファイルには書きません。
+- `SITEBOT_CONFIDENTIAL_TERMS` — カンマまたは改行区切り。本文に含まれると下書きを作りません。
+- `SITEBOT_DEV_USER_ID` / `SITEBOT_DEV_USER_NAME` — 開発用の依頼者。未設定時は `dev-requester` / `開発用ユーザー`。
+- `SITEBOT_PACK_ROOT` / `SITEBOT_DATA_ROOT` — サイト定義と下書きの保存先。通常は変更しません。
+
 ## コマンド
 
 ```bash
 npm test
 npm run typecheck
+npm run build:web
 npm run sitebot -- run-fixture bga --root out
 npm run sitebot -- prepare-image --file photo.jpg --kind achievement --root out
 ```
