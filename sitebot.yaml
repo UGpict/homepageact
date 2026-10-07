@@ -28,12 +28,13 @@ forbidden_paths:
   - content/pages.json
   - content/style.md
 recipes:
-  # U1 が「データファイル」に決まるまで開始しない。分類器だけ先に置く。
+  # 対象はデータファイルだけ。TSX 直書きのページはこのレシピに渡さない。
   text_edit:
     tier: 1
     executor: structured
-    enabled: false
-    may_edit: []
+    enabled: true
+    may_edit:
+      - content/achievements/**
     also_may_edit: []
   achievement:
     tier: 2

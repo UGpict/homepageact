@@ -11,7 +11,7 @@ import { buildAchievementPayload } from "../src/payload.ts"
 import { assertPublishAllowed, expectedPublishPath } from "../src/paths.ts"
 import { renderAchievementIndex, INDEX_DISCLAIMER } from "../src/render.ts"
 import { evaluateMerge, invalidateLocation, recordTechnicalDecision } from "../src/review.ts"
-import { runAchievementJob, runColumnJob, runTextEdit } from "../src/run-job.ts"
+import { runAchievementJob, runColumnJob } from "../src/run-job.ts"
 import { AchievementFacts } from "../src/schema.ts"
 import { loadSitePack, selectVerifiedClaims, type SitePack } from "../src/sitepack.ts"
 
@@ -46,7 +46,8 @@ function runBga(
 }
 
 test("site pack keeps trust files read-only and leaves cross-file edits closed", () => {
-  assert.equal(pack.recipes.text_edit.enabled, false)
+  assert.equal(pack.recipes.text_edit.enabled, true)
+  assert.deepEqual(pack.recipes.text_edit.mayEdit, ["content/achievements/**"])
   assert.deepEqual(pack.recipes.achievement.alsoMayEdit, [])
   assert.deepEqual(pack.recipes.column.alsoMayEdit, [])
   assert.equal(pack.recipes.achievement.executor, "structured")
@@ -113,10 +114,6 @@ test("publish paths reject traversal and protected files", () => {
   assert.doesNotThrow(() =>
     assertPublishAllowed("content/achievements/bga.json", pack.allowedPaths, pack.forbiddenPaths),
   )
-})
-
-test("text_edit does not start while pages are not data files", () => {
-  assert.throws(() => runTextEdit(), /RECIPE_DISABLED/)
 })
 
 test("model JSON cannot carry review, facts, or a write path", async () => {
