@@ -1,0 +1,52 @@
+framework: nextjs
+commands:
+  install: npm ci
+  build: npm run build
+  check:
+    - npm run lint
+    - npm run typecheck
+preview: vercel
+site_admins:
+  - 伊藤大智
+allowed_paths:
+  - content/achievements/**
+  - content/columns/**
+  - public/images/achievement/**
+  - public/images/column/**
+forbidden_paths:
+  - package.json
+  - package-lock.json
+  - next.config.*
+  - tsconfig.json
+  - .github/**
+  - public/.htaccess
+  - src/components/**
+  - src/app/**
+  - content/claims.yaml
+  - content/taxonomy.yaml
+  - knowledge/verified-claims.yaml
+  - content/pages.json
+  - content/style.md
+recipes:
+  # U1 が「データファイル」に決まるまで開始しない。分類器だけ先に置く。
+  text_edit:
+    tier: 1
+    executor: structured
+    enabled: false
+    may_edit: []
+    also_may_edit: []
+  achievement:
+    tier: 2
+    executor: structured
+    enabled: true
+    output: content/achievements/{slug}.json
+    also_may_edit: []
+    technical_review: true
+  column:
+    tier: 2
+    executor: structured
+    enabled: true
+    output: content/columns/{slug}.json
+    also_may_edit: []
+    outline_approval: true
+    technical_review: true

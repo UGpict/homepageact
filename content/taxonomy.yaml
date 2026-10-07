@@ -1,0 +1,27 @@
+components:
+  semiconductor:
+    label: 半導体
+    aliases: []
+  bga:
+    label: BGA
+    aliases: [ボールグリッドアレイ]
+    relatedPage: { kind: achievement, slug: bga }
+  sic-mosfet:
+    label: SiC MOSFET
+    aliases: [SiC]
+materials:
+  underfill-resin:
+    label: アンダーフィル樹脂
+    aliases: [アンダーフィル]
+methods:
+  underfill-removal:
+    label: アンダーフィル除去
+    aliases: []
+  cross-section:
+    label: 断面研磨
+    aliases: []
+purposes: {}
+industries:
+  automotive-parts:
+    label: 自動車部品メーカー
+    aliases: [自動車部品]
