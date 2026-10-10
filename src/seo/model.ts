@@ -58,11 +58,54 @@ export const ComparisonSchema = z.object({
   if (v.previous.end >= v.current.start) ctx.addIssue({ code: "custom", message: "前期間と今回の期間が重ならないようにしてください。" })
 })
 export type Comparison = z.infer<typeof ComparisonSchema>
-export const WorkspaceSchema = z.object({
-  version: z.literal(1), pages: z.array(PageSchema).max(10000),
-  comparison: ComparisonSchema.nullable(), demo: z.boolean(),
-}).strict().superRefine((v, ctx) => {
+export const TaskPlanSchema = z.object({
+  goal: z.string().trim().max(1000),
+  query: z.string().trim().max(200),
+  querySource: z.string().trim().max(1000),
+  research: z.string().trim().max(4000),
+  experiment: z.string().trim().max(2000),
+  photos: z.string().trim().max(2000),
+  evidence: z.string().trim().max(4000),
+  limitations: z.string().trim().max(2000),
+  evidenceReady: z.boolean(),
+}).strict()
+export type TaskPlan = z.infer<typeof TaskPlanSchema>
+export const SeoTaskSchema = z.object({
+  id: z.string().regex(/^seo-[a-zA-Z0-9-]+$/),
+  page: PageSchema,
+  week: DateText,
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+  demo: z.boolean(),
+  status: z.enum(["queued", "researching", "evidence-needed", "brief-ready", "done", "cancelled"]),
+  snapshot: z.object({
+    previousStart: DateText, previousEnd: DateText, currentStart: DateText, currentEnd: DateText,
+    filters: z.string().min(1).max(500),
+    previous: MetricSchema, current: MetricSchema,
+    reason: z.string().min(1).max(1000), next: z.string().min(1).max(1000),
+  }).strict(),
+  plan: TaskPlanSchema,
+}).strict().superRefine((task, ctx) => {
+  if (task.page.url !== task.snapshot.current.url || task.page.url !== task.snapshot.previous.url) ctx.addIssue({ code: "custom", message: "作業と検索根拠のURLが一致しません。" })
+  if (["brief-ready", "done"].includes(task.status) && (!task.plan.goal || !task.plan.query || !task.plan.querySource || !task.plan.research || !task.plan.evidence || !task.plan.limitations || !task.plan.evidenceReady)) ctx.addIssue({ code: "custom", message: "準備完了には目的・クエリと確認元・調査・根拠・適用範囲を記入し、資料の準備を確認してください。" })
+})
+export type SeoTask = z.infer<typeof SeoTaskSchema>
+const workspaceBase = {
+  pages: z.array(PageSchema).max(10000), comparison: ComparisonSchema.nullable(), demo: z.boolean(),
+}
+const LegacyWorkspaceSchema = z.object({ version: z.literal(1), ...workspaceBase }).strict()
+const CurrentWorkspaceSchema = z.object({ version: z.literal(2), ...workspaceBase, tasks: z.array(SeoTaskSchema).max(1000) }).strict()
+export const WorkspaceSchema = z.union([CurrentWorkspaceSchema, LegacyWorkspaceSchema]).transform(v => ({ ...v, version: 2 as const, tasks: "tasks" in v ? v.tasks : [] })).superRefine((v, ctx) => {
   if (new Set(v.pages.map(p => p.url)).size !== v.pages.length) ctx.addIssue({ code: "custom", message: "ページ台帳のURLが重複しています。" })
+  if (new Set(v.tasks.map(t => t.id)).size !== v.tasks.length) ctx.addIssue({ code: "custom", message: "作業IDが重複しています。" })
+  const weeks = new Map<string, number>()
+  for (const task of v.tasks) {
+    if (task.status !== "cancelled") weeks.set(task.week, (weeks.get(task.week) ?? 0) + 1)
+  }
+  if ([...weeks.values()].some(count => count > 2)) ctx.addIssue({ code: "custom", message: "同じ週に選べる作業は2件までです。" })
+  const active = v.tasks.filter(t => !["done", "cancelled"].includes(t.status))
+  if (new Set(active.map(t => t.page.url)).size !== active.length) ctx.addIssue({ code: "custom", message: "同じページの未完了作業が重複しています。" })
+  if (v.tasks.some(t => t.demo !== v.demo)) ctx.addIssue({ code: "custom", message: "デモ作業と実データを混在させることはできません。" })
 })
 export type Workspace = z.infer<typeof WorkspaceSchema>
 
@@ -75,7 +118,7 @@ const entries: Array<[string, string, Page["kind"]]> = [
   ...["shrinkage-void", "wire-harness", "crack", "resin-curing", "sic", "resin", "buffing", "hard-to-polish", "chip-size"].map(slug => [`column/${slug}/`, slug, "column"] as [string, string, Page["kind"]]),
 ]
 export function emptyWorkspace(): Workspace {
-  return { version: 1, demo: false, comparison: null, pages: entries.map(([slug, title, kind]) => ({ url: SITE + slug, title, kind, purpose: "", businessFit: null, lastEdited: null })) }
+  return { version: 2, tasks: [], demo: false, comparison: null, pages: entries.map(([slug, title, kind]) => ({ url: SITE + slug, title, kind, purpose: "", businessFit: null, lastEdited: null })) }
 }
 export function attachComparison(workspace: Workspace, comparison: Comparison): Workspace {
   const parsed = ComparisonSchema.parse(comparison)
