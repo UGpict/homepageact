@@ -1,6 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { mkdtempSync, readFileSync, existsSync, readdirSync, writeFileSync, rmSync } from "node:fs"
+import { mkdtempSync, readFileSync, existsSync, readdirSync, writeFileSync, rmSync, mkdirSync, symlinkSync } from "node:fs"
 import path from "node:path"
 import { tmpdir } from "node:os"
 import { fileURLToPath } from "node:url"
@@ -8,8 +8,9 @@ import { createSeoMetadataDraft, seoMetadataGeneratorFromEnv } from "../src/appl
 import { mockAchievementProvider } from "../src/application/provider.ts"
 import { runAchievementJob } from "../src/run-job.ts"
 import { loadSitePack } from "../src/sitepack.ts"
-import { getSeoDraftReview, listSeoDrafts, recordSeoDraftReview, recheckSeoDraftSource } from "../src/application/seo-draft-review.ts"
+import { exportSeoDraftHandoff, getSeoDraftReview, listSeoDrafts, recordSeoDraftReview, recheckSeoDraftSource } from "../src/application/seo-draft-review.ts"
 import { importSeoPublicSource } from "../src/application/seo-source.ts"
+import { verifySeoHandoff, validateSeoHandoff } from "../src/seo-handoff.ts"
 import { currentUserFromEnv } from "../src/application/user.ts"
 const packRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const now = "2026-10-10T15:00:00.000Z"
@@ -251,4 +252,39 @@ test("parallel source checks never replace detected drift with an older matching
     assert.equal(getSeoDraftReview(ctx, draft.jobId)?.origin.status, "changed")
     assert.equal(getSeoDraftReview(ctx, draft.jobId)?.canReview, false)
   }
+})
+
+test("handoff requires all technical decisions, requester, fresh source and current revision; dry run writes nothing", async () => {
+  const { ctx, input, created } = await setup()
+  const draft = await createSeoMetadataDraft(ctx, input)
+  const exportNow = () => exportSeoDraftHandoff(ctx, draft.jobId, { revision: getSeoDraftReview(ctx, draft.jobId)!.revision })
+  assert.throws(exportNow, /技術確認/)
+  let detail = await checked(ctx, draft.jobId)
+  const reviewer = { ...ctx, user: { id: "engineer", displayName: "技術担当", roles: ["technical-reviewer" as const] } }
+  for (const claim of detail.review) detail = recordSeoDraftReview(reviewer, draft.jobId, { revision: detail.revision, claimId: claim.detail.id, decision: "confirmed", note: "自社検証の元データと照合" })
+  assert.throws(() => exportSeoDraftHandoff(reviewer, draft.jobId, { revision: detail.revision }), /依頼者/)
+  assert.throws(() => exportSeoDraftHandoff(ctx, draft.jobId, { revision: draft.jobId.padEnd(64,"0") }), /更新|Invalid/)
+  const pack = exportNow()
+  const targetRoot = path.join(ctx.dataRoot, "original")
+  const target = path.join(targetRoot, created.relativePath)
+  const before = readFileSync(target,"utf8")
+  assert.equal(verifySeoHandoff(pack, targetRoot).publicationApproved, false)
+  assert.equal(readFileSync(target,"utf8"), before)
+  const escapedRoot = path.join(ctx.dataRoot, "escaped")
+  mkdirSync(path.join(escapedRoot,"content"),{recursive:true})
+  symlinkSync(path.join(targetRoot,"content/achievements"),path.join(escapedRoot,"content/achievements"))
+  assert.throws(() => verifySeoHandoff(pack,escapedRoot), /リポジトリ外/)
+  assert.equal(pack.reviews.length, detail.review.length)
+  assert.deepEqual(pack.original, input.document)
+  assert.throws(() => validateSeoHandoff({ ...pack, targetPath: "../outside.json" }), /対象/)
+  assert.throws(() => validateSeoHandoff({ ...pack, proposal: { ...pack.proposal, points: [] } }))
+  assert.throws(() => validateSeoHandoff({ ...pack, proposedHash: "0".repeat(64) }), /修正案/)
+  assert.throws(() => validateSeoHandoff({ ...pack, reviews: [] }))
+  const changed = structuredClone(input.document); changed.generated.title += "更新"
+  writeFileSync(target, JSON.stringify(changed))
+  assert.throws(() => verifySeoHandoff(pack,targetRoot), /元JSON/)
+  const expired = { ...ctx, now: "2026-10-10T15:31:00.000Z" }
+  assert.throws(() => exportSeoDraftHandoff(expired,draft.jobId,{ revision: detail.revision }), /技術確認/)
+  detail = recordSeoDraftReview(reviewer,draft.jobId,{ revision: detail.revision, claimId: detail.review[0]!.detail.id, decision:"needs_changes",note:"追加検証が必要" })
+  assert.throws(exportNow,/技術確認/)
 })
