@@ -32,7 +32,7 @@ const StoredClaim = z
   })
   .strict()
 
-const StoredJob = z
+export const StoredJob = z
   .object({
     jobId: JobId,
     recipe: z.literal("achievement"),
