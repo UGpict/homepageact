@@ -291,3 +291,6 @@ dd { margin: 0 0 8px; }
 @media (max-width: 640px) { .seo-columns { grid-template-columns: 1fr; } .seo-candidates li { padding: 12px; } }
 .seo-dashboard > *, .seo-columns > * { min-width: 0; }
 .seo-period { overflow-wrap: anywhere; }
+
+.seo-work-card { padding: 16px; border: 1px solid #d5d9e0; border-radius: 8px; overflow-wrap: anywhere; }
+.seo-work-card .actions { margin-top: 12px; }

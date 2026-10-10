@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState, type FormEvent } from "react"
 import Link from "next/link"
+import SeoWorkItems from "./SeoWorkItems"
+import { addTask } from "../../../src/seo/tasks"
 import { analyze, candidates, ctr, type Finding } from "../../../src/seo/analyze"
 import { importPagesCsv } from "../../../src/seo/csv"
 import { demoWorkspace } from "../../../src/seo/demo"
@@ -142,11 +144,13 @@ export default function SeoDashboard() {
         <h3><a href={f.page.url} target="_blank" rel="noreferrer">{f.page.title}</a></h3>
         <p className="meta">{f.score === null ? "重要度未設定・優先順は暫定" : `確認優先度 ${f.score}（社内の目安）`}</p>
         {metrics(f)}<p>{f.reason}</p><p><strong>次にすること：</strong>{f.next}</p>
+        <button className="secondary" disabled={disabled || workspace.tasks.some(t => t.page.url === f.page.url && !["done", "cancelled"].includes(t.status))} onClick={() => { try { commit(addTask(workspace, f.page.url, new Date().toISOString(), `seo-${crypto.randomUUID()}`), "今週の作業に追加しました。下の作業欄で調査・準備を進めてください。") } catch (e) { setError(message(e)) } }}>今週の作業に追加</button>
       </li>)}</ol>}
       <details><summary>候補を選ぶルール</summary><p>両期間100表示以上が比較の目安です。クリック減少と平均順位2以上の悪化、順位差1以内でCTRが1ポイント以上低下、または今回の平均順位4〜15を確認対象にします。優先度は重要度×3＋確認理由の点数（3・2・1）。Googleの評価や成果予測ではありません。更新から集計終了まで28日未満は経過観察としますが、不具合・誤記は随時修正します。</p></details>
     </section>
+    <SeoWorkItems key={workspace.demo ? "demo" : "real"} workspace={workspace} disabled={disabled} onSave={commit} onError={e => setError(message(e))} />
     <section className="panel">
-      <h2>3. ページ台帳</h2><p className="hint">初期登録は公開URLの確認候補26件です。名称・目的・重要度・更新日はここで整えます。登録は公開・インデックス状況を保証しません。</p>
+      <h2>4. ページ台帳</h2><p className="hint">初期登録は公開URLの確認候補26件です。名称・目的・重要度・更新日はここで整えます。登録は公開・インデックス状況を保証しません。</p>
       <div className="actions"><label>表示する状態<select value={filter} onChange={e => setFilter(e.target.value)}><option value="all">すべて（{findings.length}）</option>{Object.entries(statuses).map(([key, label]) => <option key={key} value={key}>{label}（{findings.filter(f => f.status === key).length}）</option>)}</select></label><button className="secondary" disabled={disabled} onClick={() => { setEditing(null); setAdding(true) }}>ページを登録</button></div>
       {(adding || editing) && <form className="form seo-editor" key={editing?.url ?? "new"} onSubmit={savePage}>
         <fieldset disabled={disabled}><legend>{adding ? "ページを登録" : "台帳を編集"}</legend>

@@ -89,6 +89,15 @@ test("atomic import adds new URLs without mutating ledger and validates backup v
   assert.equal(next.pages.length, 27)
   assert.equal(next.demo, false)
   assert.equal(WorkspaceSchema.safeParse(JSON.parse(JSON.stringify(next))).success, true)
-  assert.equal(WorkspaceSchema.safeParse({ ...next, version: 2 }).success, false)
+  assert.equal(WorkspaceSchema.safeParse({ ...next, version: 3 }).success, false)
   assert.equal(WorkspaceSchema.safeParse({ ...next, pages: [next.pages[0], next.pages[0]] }).success, false)
+})
+
+test("old backups migrate without losing page or comparison data", () => {
+  const legacy = { ...emptyWorkspace(), version: 1 } as Record<string, unknown>
+  delete legacy.tasks
+  const migrated = WorkspaceSchema.parse(legacy)
+  assert.equal(migrated.version, 2)
+  assert.deepEqual(migrated.tasks, [])
+  assert.deepEqual(migrated.pages, legacy.pages)
 })
