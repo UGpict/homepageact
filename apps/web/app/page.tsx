@@ -1,6 +1,7 @@
 import Link from "next/link"
 
 const tasks = [
+  { href: "/seo", label: "検索データから改善を考える", ready: true },
   { href: "/achievements/new", label: "実績を追加する", ready: true },
   { href: "", label: "技術コラムを書く", ready: false },
   { href: "", label: "既存ページを修正", ready: false },

@@ -269,3 +269,25 @@ dd { margin: 0 0 8px; }
 @media (max-width: 800px) {
   .review-layout { grid-template-columns: 1fr; }
 }
+
+/* SEO review workspace */
+.seo-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.seo-dashboard input[type="date"] { font: inherit; padding: 8px; border: 1px solid #b7c0cc; border-radius: 6px; max-width: 100%; }
+.seo-dashboard input[type="file"] { max-width: 100%; }
+.seo-period, .seo-editor { margin-top: 20px; padding: 16px; background: #f2f6fa; border-radius: 8px; }
+.seo-candidates { padding-left: 24px; }
+.seo-candidates li { padding: 16px; margin-bottom: 12px; border: 1px solid #d5d9e0; border-radius: 8px; }
+.seo-metrics { display: flex; flex-wrap: wrap; gap: 8px 20px; }
+.seo-metrics span { display: grid; font-size: .85rem; }
+.seo-table { overflow-x: auto; }
+.seo-table table { min-width: 800px; }
+.seo-table td { vertical-align: top; }
+.seo-table td:first-child { max-width: 240px; overflow-wrap: anywhere; }
+.seo-table td:nth-child(2) { max-width: 280px; }
+.seo-table td:nth-child(3) { min-width: 180px; }
+.seo-table small { display: block; color: #526072; margin: 4px 0; }
+.seo-file { font-size: .9rem; }
+.seo-dashboard .choice { align-items: start; }
+@media (max-width: 640px) { .seo-columns { grid-template-columns: 1fr; } .seo-candidates li { padding: 12px; } }
+.seo-dashboard > *, .seo-columns > * { min-width: 0; }
+.seo-period { overflow-wrap: anywhere; }
