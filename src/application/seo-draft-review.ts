@@ -11,6 +11,7 @@ import { StoredJob } from "./repository.ts"
 import type { AppContext } from "./service.ts"
 import type { SeoMetadataDraft } from "./seo-draft.ts"
 import { readBoundSource, readSourceCheck, sourceBindingView, writeSourceCheck, isFreshSourceTime, type SourceBindingView } from "./seo-source-binding.ts"
+import { achievementHash, validateSeoHandoff } from "../seo-handoff.ts"
 import { importSeoPublicSource } from "./seo-source.ts"
 
 const JobId = z.string().regex(/^job-[a-f0-9]{8}$/)
@@ -27,7 +28,7 @@ const InputSchema = z.object({
 }).strict()
 export type SeoDraftReview = SeoMetadataDraft & {
   revision: string; createdAt: string; requestedBy: string; pendingCount: number;
-  canReview: boolean; history: Array<z.infer<typeof EntrySchema>>;
+  canReview: boolean; canHandoff: boolean; history: Array<z.infer<typeof EntrySchema>>;
   origin: SourceBindingView;
 }
 export type SeoDraftListItem = Pick<SeoDraftReview, "jobId" | "sourceUrl" | "createdAt" | "phaseLabel" | "pendingCount"> & { title: string }
@@ -78,6 +79,7 @@ function readState(ctx: Context, jobId: string) {
     review: view.claims, phaseLabel: sourceLabels[origin.status], pendingCount: view.pendingCount,
     revision: hashText(JSON.stringify({ sourceRevision, audit, check })), createdAt: document.meta.updatedAt, requestedBy: job.requestedBy,
     canReview: origin.status === "unchanged" && ctx.user.roles.includes("technical-reviewer") && ctx.user.id !== job.requestedBy,
+    canHandoff: origin.status === "unchanged" && view.pendingCount === 0 && view.claims.length > 0 && ctx.user.id === job.requestedBy && ctx.user.roles.includes("requester"),
     history: audit.entries, origin, originSourceId: origin.baseline?.id ?? null,
   }
   return { root, audit, detail, sourceRevision, check }
@@ -133,4 +135,23 @@ export async function recheckSeoDraftSource(ctx: Context, jobId: string, input: 
   if (JSON.stringify(current.check) !== JSON.stringify(state.check) && !detectsChange) throw new Error("再取得中に別の原本確認が更新されました。再読み込みして確認してください。")
   writeSourceCheck(state.root, { sourceRevision: state.sourceRevision, checkedAt: now, latestId: latest?.id ?? null, failed: !latest, changedEver: !!current.check?.changedEver || detectsChange })
   return getSeoDraftReview(ctx, jobId)!
+}
+
+/** Export reviewed metadata only; does not create a commit or grant publication approval. */
+export function exportSeoDraftHandoff(ctx: Context, jobId: string, input: unknown) {
+  const request = z.object({ revision: z.string().regex(/^[a-f0-9]{64}$/) }).strict().parse(input)
+  const state = readState(ctx, jobId)
+  if (!state || !state.detail.canHandoff) throw new Error("依頼者による書き出しには全項目の技術確認と有効な公開原本の確認が必要です。")
+  if (request.revision !== state.detail.revision) throw new Error("確認記録が更新されています。再読み込みしてください。")
+  const original = PublicAchievementSchema.parse(json(path.join(state.root, "source.json")))
+  const proposal = Object.fromEntries(state.detail.changes.map(c => [c.field, c.after]))
+  const proposed = { ...original, generated: { ...original.generated, ...proposal } }
+  const baseline = state.detail.origin.baseline!
+  const reviews = state.detail.review.map(c => {
+    const entry = [...state.audit.entries].reverse().find(e => e.claimId === c.detail.id)!
+    return { claimId: entry.claimId, reviewer: entry.reviewer, note: entry.note, at: entry.at, sourceCheckedAt: entry.sourceCheckedAt!, sourceHtmlHash: entry.sourceHtmlHash! }
+  })
+  const pack = validateSeoHandoff({ version: 1, purpose: "reviewed-metadata-handoff-not-publication-approval", jobId, revision: state.detail.revision, exportedAt: ctx.now ?? new Date().toISOString(), requestedBy: state.detail.requestedBy, exportedBy: ctx.user.id, targetPath: `content/achievements/${original.generated.slug}.json`, sourceUrl: state.detail.sourceUrl, original, originalHash: achievementHash(original), proposal, proposedHash: achievementHash(proposed), publicSource: { htmlHash: baseline.htmlHash, fetchedAt: baseline.fetchedAt, checkedAt: state.detail.origin.checkedAt! }, reviews })
+  if (findConfidentialLeaks([JSON.stringify(pack)], ctx.confidentialTerms).length) throw new Error("引き渡しデータに機密語を含めないでください。")
+  return pack
 }
