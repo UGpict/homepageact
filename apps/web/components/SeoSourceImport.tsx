@@ -4,18 +4,20 @@ import { useRouter } from "next/navigation"
 import { useState, type FormEvent } from "react"
 import type { SeoPublicSource } from "../../../src/application/seo-source"
 import type { PublicAchievement } from "../../../src/schema"
-export default function SeoSourceImport({ url, document }: { url?: string; document?: PublicAchievement | null }) {
+export default function SeoSourceImport({ url, document, onSource }: { url?: string; document?: PublicAchievement | null; onSource?: (source: SeoPublicSource | null) => void }) {
   const router = useRouter()
   const [source, setSource] = useState<SeoPublicSource | null>(null)
   const [busy, setBusy] = useState(false); const [error, setError] = useState("")
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); const data = new FormData(event.currentTarget)
     setBusy(true); setError(""); setSource(null)
+    onSource?.(null)
     try {
       const response = await fetch("/api/seo/sources", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ url: url ?? String(data.get("url") ?? "").trim() }) })
       const body = await response.json()
       if (!response.ok || !body.ok) throw new Error(body.error ?? "取得できませんでした。")
       setSource(body.source)
+      onSource?.(body.source)
       router.refresh()
     } catch (e) { setError(e instanceof Error ? e.message : "取得できませんでした。") } finally { setBusy(false) }
   }
