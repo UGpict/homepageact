@@ -1,6 +1,7 @@
 "use client"
 import { useState, type FormEvent } from "react"
 import Link from "next/link"
+import SeoSourceImport from "./SeoSourceImport"
 import { PublicAchievementSchema, type PublicAchievement } from "../../../src/schema"
 import type { SeoTask } from "../../../src/seo/model"
 import type { SeoMetadataDraft } from "../../../src/application/seo-draft"
@@ -37,6 +38,7 @@ export default function SeoDraftForm({ task }: { task: SeoTask }) {
     <h3>タイトル・見出し・説明文の下書きを作る</h3>
     <p className="hint">対象ページの構造化JSONが必要です。元データと入力した指示・修正案をアプリのサーバーへ送信し、下書きとして保存します。検索CSVや作業メモ全体は送信しません。</p>
     <label>対象ページの公開用JSON<input type="file" accept=".json,application/json" disabled={busy} onChange={e => { void read(e.target.files?.[0]) }} /></label>
+    <SeoSourceImport url={task.page.url} document={document} />
     {error && <p className="error" role="alert">{error}</p>}
     {document && <form className="form" onSubmit={submit} key={document.generated.slug}>
       <fieldset disabled={busy}><legend>修正する文章</legend>
