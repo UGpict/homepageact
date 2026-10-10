@@ -1,5 +1,6 @@
 "use client"
 import { useState, type FormEvent } from "react"
+import Link from "next/link"
 import { PublicAchievementSchema, type PublicAchievement } from "../../../src/schema"
 import type { SeoTask } from "../../../src/seo/model"
 import type { SeoMetadataDraft } from "../../../src/application/seo-draft"
@@ -59,7 +60,8 @@ export default function SeoDraftForm({ task }: { task: SeoTask }) {
       }}>修正案JSONを保存</button>
       {result.changes.map(change => <div key={change.field}><strong>{change.field}</strong><div className="seo-columns"><div><small>変更前</small><p className="preserve">{change.before}</p></div><div><small>変更案</small><p className="preserve">{change.after}</p></div></div></div>)}
       {result.review.length > 0 && <ul>{result.review.map(c => <li key={c.detail.id}>{c.headline}：{c.quotation}</li>)}</ul>}
-      <p className="hint">内容確認と必要な技術確認は別途行います。保存先の作業ID：{result.jobId}。この画面の結果表示は再読み込みすると消えますが、下書きファイルはサーバーに残ります。</p>
+      <p><Link href={`/seo/drafts/${result.jobId}`}>保存した下書きを開いて確認する</Link></p>
+      <p className="hint">作業ID：{result.jobId}。再読み込み後も「保存したSEO下書き」から開けます。技術確認と公開承認は別途必要です。</p>
     </div>}
   </div>
 }

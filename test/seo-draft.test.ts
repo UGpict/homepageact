@@ -1,6 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { mkdtempSync, readFileSync, existsSync, readdirSync } from "node:fs"
+import { mkdtempSync, readFileSync, existsSync, readdirSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { tmpdir } from "node:os"
 import { fileURLToPath } from "node:url"
@@ -8,6 +8,8 @@ import { createSeoMetadataDraft, seoMetadataGeneratorFromEnv } from "../src/appl
 import { mockAchievementProvider } from "../src/application/provider.ts"
 import { runAchievementJob } from "../src/run-job.ts"
 import { loadSitePack } from "../src/sitepack.ts"
+import { getSeoDraftReview, listSeoDrafts, recordSeoDraftReview } from "../src/application/seo-draft-review.ts"
+import { currentUserFromEnv } from "../src/application/user.ts"
 const packRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const now = "2026-10-10T15:00:00.000Z"
 async function setup() {
@@ -66,4 +68,90 @@ test("HTTP generation sends only text-edit payload, retains server credentials, 
   assert.equal(body.includes("test-key"), false)
   assert.equal(payload.current.slug, "bga")
   assert.equal(seoMetadataGeneratorFromEnv({}), undefined)
+})
+
+test("saved drafts reopen from canonical content, not cached review status, and list empty stores", async () => {
+  const { ctx, input } = await setup()
+  assert.deepEqual(listSeoDrafts(ctx), { drafts: [], unreadable: 0 })
+  const draft = await createSeoMetadataDraft(ctx, input)
+  const summaryPath = path.join(ctx.dataRoot, "seo-drafts", draft.jobId, "summary.json")
+  writeFileSync(summaryPath, JSON.stringify({ ...draft, review: [], phaseLabel: "公開準備完了" }))
+  const reopened = getSeoDraftReview(ctx, draft.jobId)!
+  assert.equal(reopened.phaseLabel, "技術確認待ち")
+  assert.equal(reopened.canReview, false)
+  assert.equal(reopened.createdAt, now)
+  assert.deepEqual(reopened.document, draft.document)
+  assert.equal(listSeoDrafts(ctx).drafts[0]?.jobId, draft.jobId)
+  assert.equal(getSeoDraftReview(ctx, "../../original"), undefined)
+  assert.equal(getSeoDraftReview(ctx, "job-00000000"), undefined)
+})
+test("technical review persists decisions and reasons, keeps document unchanged, and supports correction", async () => {
+  const { ctx, input } = await setup()
+  const draft = await createSeoMetadataDraft(ctx, input)
+  const reviewer = { ...ctx, user: { id: "engineer", displayName: "技術担当", roles: ["technical-reviewer" as const] } }
+  const opened = getSeoDraftReview(reviewer, draft.jobId)!
+  assert.equal(opened.canReview, true)
+  const claimId = opened.review[0]!.detail.id
+  const approved = recordSeoDraftReview(reviewer, draft.jobId, { revision: opened.revision, claimId, decision: "confirmed", note: "自社検証データと公開ページを照合" })
+  assert.equal(approved.review[0]?.detail.status, "ok")
+  assert.equal(approved.history[0]?.reviewer, "engineer")
+  assert.notEqual(approved.revision, opened.revision)
+  assert.deepEqual(approved.document, draft.document)
+  assert.equal(approved.document.meta.status, "draft")
+  assert.notEqual(approved.phaseLabel, "公開準備完了")
+  assert.deepEqual(getSeoDraftReview(reviewer, draft.jobId), approved)
+  const reverted = recordSeoDraftReview(reviewer, draft.jobId, { revision: approved.revision, claimId, decision: "needs_changes", note: "説明文の条件表記を修正する必要あり" })
+  assert.equal(reverted.review[0]?.detail.status, "pending")
+  assert.equal(reverted.history.length, 2)
+  assert.equal(listSeoDrafts(ctx).drafts[0]?.pendingCount, reverted.pendingCount)
+  let complete = reverted
+  for (const claim of complete.review) {
+    complete = recordSeoDraftReview(reviewer, draft.jobId, { revision: complete.revision, claimId: claim.detail.id, decision: "confirmed", note: "全項目を自社検証データで照合" })
+  }
+  assert.equal(complete.pendingCount, 0)
+  assert.equal(complete.phaseLabel, "内容の確認")
+  assert.equal(complete.document.meta.status, "draft")
+})
+test("review rejects self-approval, wrong role, stale revisions, unknown claims and confidential reasons", async () => {
+  const { ctx, input } = await setup()
+  const draft = await createSeoMetadataDraft(ctx, input)
+  const opened = getSeoDraftReview(ctx, draft.jobId)!
+  const request = { revision: opened.revision, claimId: opened.review[0]!.detail.id, decision: "confirmed", note: "検証済み" }
+  assert.throws(() => recordSeoDraftReview(ctx, draft.jobId, request), /別の技術/)
+  assert.throws(() => recordSeoDraftReview({ ...ctx, user: { ...ctx.user, roles: ["technical-reviewer"] } }, draft.jobId, request), /別の技術/)
+  const reviewer = { ...ctx, user: { id: "engineer", displayName: "技術担当", roles: ["technical-reviewer" as const] } }
+  assert.throws(() => recordSeoDraftReview(reviewer, draft.jobId, { ...request, claimId: "unknown" }), /項目/)
+  assert.throws(() => recordSeoDraftReview(reviewer, draft.jobId, { ...request, note: " " }))
+  assert.throws(() => recordSeoDraftReview(reviewer, draft.jobId, { ...request, reviewer: "spoofed" }))
+  assert.throws(() => recordSeoDraftReview({ ...reviewer, confidentialTerms: ["秘密顧客"] }, draft.jobId, { ...request, note: "秘密顧客の検証" }), /機密/)
+  recordSeoDraftReview(reviewer, draft.jobId, request)
+  assert.throws(() => recordSeoDraftReview(reviewer, draft.jobId, request), /更新されています/)
+  assert.equal(getSeoDraftReview(reviewer, draft.jobId)?.history.length, 1)
+})
+test("changed source invalidates review; broken drafts are reported and don't hide valid drafts", async () => {
+  const { ctx, input } = await setup()
+  const draft = await createSeoMetadataDraft(ctx, input)
+  const sourcePath = path.join(ctx.dataRoot, "seo-drafts", draft.jobId, "source.json")
+  const reviewer = { ...ctx, user: { id: "engineer", displayName: "技術担当", roles: ["technical-reviewer" as const] } }
+  const opened = getSeoDraftReview(reviewer, draft.jobId)!
+  recordSeoDraftReview(reviewer, draft.jobId, { revision: opened.revision, claimId: opened.review[0]!.detail.id, decision: "confirmed", note: "検証済み" })
+  writeFileSync(sourcePath, JSON.stringify({ ...input.document, generated: { ...input.document.generated, title: "変更された元タイトル" } }))
+  assert.throws(() => getSeoDraftReview(ctx, draft.jobId), /変更されています/)
+  const valid = await createSeoMetadataDraft(ctx, input)
+  assert.deepEqual(listSeoDrafts(ctx).drafts.map(d => d.jobId), [valid.jobId])
+  assert.equal(listSeoDrafts(ctx).unreadable, 1)
+  writeFileSync(sourcePath, "broken JSON")
+  assert.equal(listSeoDrafts(ctx).unreadable, 1)
+})
+test("draft reopening refuses changes to preserved facts and generated body", async () => {
+  const { ctx, input, created } = await setup()
+  const draft = await createSeoMetadataDraft(ctx, input)
+  const target = path.join(ctx.dataRoot, "seo-drafts", draft.jobId, created.relativePath)
+  writeFileSync(target, JSON.stringify({ ...draft.document, generated: { ...draft.document.generated, points: [] } }))
+  assert.throws(() => getSeoDraftReview(ctx, draft.jobId), /事実データ/)
+})
+test("development reviewer role comes only from server environment and defaults to requester", () => {
+  assert.deepEqual(currentUserFromEnv({}).roles, ["requester"])
+  assert.deepEqual(currentUserFromEnv({ SITEBOT_DEV_USER_ROLE: "technical-reviewer" }).roles, ["technical-reviewer"])
+  assert.deepEqual(currentUserFromEnv({ SITEBOT_DEV_USER_ROLE: "site-admin" }).roles, ["requester"])
 })

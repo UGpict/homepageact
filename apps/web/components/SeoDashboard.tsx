@@ -104,6 +104,7 @@ export default function SeoDashboard() {
       <p className="lede">検索データと依頼につながる重要度を見て、今週取り組む1〜2件を選びます。</p>
       <p className="hint">データはこのブラウザ内に保存します。CSV・台帳はサーバーや外部AIへ送信しません。端末間では共有されないため、バックアップを保存してください。</p>
       <div className="actions">
+        <Link href="/seo/drafts">保存したSEO下書きを開く</Link>
         {!workspace.demo ? <button className="secondary" disabled={disabled || !!comparison} onClick={() => { try { if (window.confirm("デモに切り替えます。現在の台帳を残す場合は先にバックアップしてください。")) { commit(demoWorkspace(), "架空データのデモです。"); setEditing(null); setAdding(false) } } catch (e) { setError(message(e)) } }}>架空データで試す</button> : <button disabled={disabled} onClick={() => { try { commit(emptyWorkspace(), "デモを終了しました。実データを取り込めます。"); setEditing(null); setAdding(false) } catch (e) { setError(message(e)) } }}>デモを終了する</button>}
         <button className="secondary" disabled={disabled} onClick={() => download(workspace)}>バックアップを保存</button>
         <label className="seo-file">バックアップを復元<input type="file" accept=".json,application/json" disabled={disabled} onChange={e => { void restore(e.target.files?.[0]); e.target.value = "" }} /></label>
