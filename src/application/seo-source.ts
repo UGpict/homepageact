@@ -13,7 +13,8 @@ const SnapshotSchema = z.object({
   headings: z.array(z.object({ level: z.number().int().min(1).max(6), text: z.string() })),
   images: z.array(z.object({ src: z.string(), alt: z.string() })), tables: z.number().int().nonnegative(), embeds: z.number().int().nonnegative(),
 }).strict()
-const RecordSchema = z.object({ snapshot: SnapshotSchema, html: z.string().max(2_000_000) }).strict()
+export const PublicSourceRecordSchema = z.object({ snapshot: SnapshotSchema, html: z.string().max(2_000_000) }).strict()
+const RecordSchema = PublicSourceRecordSchema
 export type SeoPublicSource = z.infer<typeof SnapshotSchema>
 type Node = DefaultTreeAdapterMap["node"]
 function children(node: Node): Node[] { return "childNodes" in node ? node.childNodes : [] }

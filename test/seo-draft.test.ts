@@ -1,6 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { mkdtempSync, readFileSync, existsSync, readdirSync, writeFileSync } from "node:fs"
+import { mkdtempSync, readFileSync, existsSync, readdirSync, writeFileSync, rmSync } from "node:fs"
 import path from "node:path"
 import { tmpdir } from "node:os"
 import { fileURLToPath } from "node:url"
@@ -8,15 +8,22 @@ import { createSeoMetadataDraft, seoMetadataGeneratorFromEnv } from "../src/appl
 import { mockAchievementProvider } from "../src/application/provider.ts"
 import { runAchievementJob } from "../src/run-job.ts"
 import { loadSitePack } from "../src/sitepack.ts"
-import { getSeoDraftReview, listSeoDrafts, recordSeoDraftReview } from "../src/application/seo-draft-review.ts"
+import { getSeoDraftReview, listSeoDrafts, recordSeoDraftReview, recheckSeoDraftSource } from "../src/application/seo-draft-review.ts"
+import { importSeoPublicSource } from "../src/application/seo-source.ts"
 import { currentUserFromEnv } from "../src/application/user.ts"
 const packRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const now = "2026-10-10T15:00:00.000Z"
+const sourceHtml = "<!doctype html><html><head><title>公開原本</title></head><body><h1>BGA検証</h1></body></html>"
+const fetchHtml = (html = sourceHtml) => (async () => new Response(html, { headers: { "content-type": "text/html" } })) as typeof fetch
+async function checked(ctx: Awaited<ReturnType<typeof setup>>["ctx"], jobId: string) {
+  return recheckSeoDraftSource(ctx, jobId, { revision: getSeoDraftReview(ctx, jobId)!.revision }, fetchHtml())
+}
 async function setup() {
   const dataRoot = mkdtempSync(path.join(tmpdir(), "seo-draft-"))
   const ctx = { packRoot, dataRoot, user: { id: "requester", displayName: "依頼者", roles: ["requester" as const] }, provider: mockAchievementProvider(), confidentialTerms: [], now }
   const created = await runAchievementJob({ root: path.join(dataRoot, "original"), pack: loadSitePack(packRoot), jobId: "source", now, today: "2026-10-10", requestedBy: "requester", facts: JSON.parse(readFileSync(path.join(packRoot, "fixtures/bga/facts.json"), "utf8")), generate: async () => JSON.parse(readFileSync(path.join(packRoot, "fixtures/bga/model-output.json"), "utf8")) })
-  const input = { url: "https://www.macsystems.co.jp/ts/achievement/bga/", document: created.doc, proposal: { title: created.doc.generated.title + "｜検討用" }, instruction: "タイトルだけを検討用に変更", mode: "manual", publicSourceConfirmed: true }
+  const snapshot = await importSeoPublicSource(dataRoot, { url: "https://www.macsystems.co.jp/ts/achievement/bga/" }, fetchHtml(), now)
+  const input = { url: snapshot.url, sourceId: snapshot.id, document: created.doc, proposal: { title: created.doc.generated.title + "｜検討用" }, instruction: "タイトルだけを検討用に変更", mode: "manual", publicSourceConfirmed: true }
   return { ctx, input, created }
 }
 test("metadata draft uses the harness, keeps all facts and content, and never edits its source", async () => {
@@ -77,7 +84,7 @@ test("saved drafts reopen from canonical content, not cached review status, and 
   const summaryPath = path.join(ctx.dataRoot, "seo-drafts", draft.jobId, "summary.json")
   writeFileSync(summaryPath, JSON.stringify({ ...draft, review: [], phaseLabel: "公開準備完了" }))
   const reopened = getSeoDraftReview(ctx, draft.jobId)!
-  assert.equal(reopened.phaseLabel, "技術確認待ち")
+  assert.equal(reopened.phaseLabel, "公開ページの再確認待ち")
   assert.equal(reopened.canReview, false)
   assert.equal(reopened.createdAt, now)
   assert.deepEqual(reopened.document, draft.document)
@@ -88,6 +95,7 @@ test("saved drafts reopen from canonical content, not cached review status, and 
 test("technical review persists decisions and reasons, keeps document unchanged, and supports correction", async () => {
   const { ctx, input } = await setup()
   const draft = await createSeoMetadataDraft(ctx, input)
+  await checked(ctx, draft.jobId)
   const reviewer = { ...ctx, user: { id: "engineer", displayName: "技術担当", roles: ["technical-reviewer" as const] } }
   const opened = getSeoDraftReview(reviewer, draft.jobId)!
   assert.equal(opened.canReview, true)
@@ -115,6 +123,7 @@ test("technical review persists decisions and reasons, keeps document unchanged,
 test("review rejects self-approval, wrong role, stale revisions, unknown claims and confidential reasons", async () => {
   const { ctx, input } = await setup()
   const draft = await createSeoMetadataDraft(ctx, input)
+  await checked(ctx, draft.jobId)
   const opened = getSeoDraftReview(ctx, draft.jobId)!
   const request = { revision: opened.revision, claimId: opened.review[0]!.detail.id, decision: "confirmed", note: "検証済み" }
   assert.throws(() => recordSeoDraftReview(ctx, draft.jobId, request), /別の技術/)
@@ -131,6 +140,7 @@ test("review rejects self-approval, wrong role, stale revisions, unknown claims 
 test("changed source invalidates review; broken drafts are reported and don't hide valid drafts", async () => {
   const { ctx, input } = await setup()
   const draft = await createSeoMetadataDraft(ctx, input)
+  await checked(ctx, draft.jobId)
   const sourcePath = path.join(ctx.dataRoot, "seo-drafts", draft.jobId, "source.json")
   const reviewer = { ...ctx, user: { id: "engineer", displayName: "技術担当", roles: ["technical-reviewer" as const] } }
   const opened = getSeoDraftReview(reviewer, draft.jobId)!
@@ -154,4 +164,91 @@ test("development reviewer role comes only from server environment and defaults 
   assert.deepEqual(currentUserFromEnv({}).roles, ["requester"])
   assert.deepEqual(currentUserFromEnv({ SITEBOT_DEV_USER_ROLE: "technical-reviewer" }).roles, ["technical-reviewer"])
   assert.deepEqual(currentUserFromEnv({ SITEBOT_DEV_USER_ROLE: "site-admin" }).roles, ["requester"])
+})
+
+test("creation binds the saved HTML, rejects missing/wrong/stale sources before AI, and doesn't depend on the shared baseline file", async () => {
+  const { ctx, input } = await setup()
+  let calls = 0; const generate = async () => { calls++; return { title: "案" } }
+  await assert.rejects(() => createSeoMetadataDraft(ctx, { ...input, sourceId: undefined, mode: "ai" }, generate))
+  await assert.rejects(() => createSeoMetadataDraft(ctx, { ...input, sourceId: "source-0000000000000000", mode: "ai" }, generate))
+  const other = await importSeoPublicSource(ctx.dataRoot, { url: input.url.replace("bga", "other") }, fetchHtml(), now)
+  await assert.rejects(() => createSeoMetadataDraft(ctx, { ...input, sourceId: other.id, mode: "ai" }, generate), /対象ページ/)
+  await assert.rejects(() => createSeoMetadataDraft({ ...ctx, now: "2026-10-10T15:31:00.000Z" }, { ...input, mode: "ai" }, generate), /30分/)
+  assert.equal(calls, 0)
+  const draft = await createSeoMetadataDraft(ctx, input)
+  rmSync(path.join(ctx.dataRoot, "seo-sources", input.sourceId + ".json"))
+  assert.equal(JSON.parse(readFileSync(path.join(ctx.dataRoot, "seo-drafts", draft.jobId, "origin.json"), "utf8")).html, sourceHtml)
+  assert.equal(getSeoDraftReview(ctx, draft.jobId)?.origin.baseline?.title, "公開原本")
+})
+test("changed public HTML suspends previous confirmations permanently for this draft, even if the site is restored", async () => {
+  const { ctx, input } = await setup(); const draft = await createSeoMetadataDraft(ctx, input)
+  let opened = await checked(ctx, draft.jobId)
+  const reviewer = { ...ctx, user: { id: "engineer", displayName: "技術担当", roles: ["technical-reviewer" as const] } }
+  for (const claim of opened.review) opened = recordSeoDraftReview(reviewer, draft.jobId, { revision: opened.revision, claimId: claim.detail.id, decision: "confirmed", note: "照合済み" })
+  assert.equal(opened.pendingCount, 0)
+  const changed = await recheckSeoDraftSource(reviewer, draft.jobId, { revision: opened.revision }, fetchHtml(sourceHtml + "<!--changed footer-->"))
+  assert.equal(changed.origin.status, "changed"); assert.equal(changed.canReview, false)
+  assert.ok(changed.pendingCount > 0); assert.ok(changed.history.length > 0)
+  assert.ok(changed.review.every(c => c.detail.status === "pending"))
+  assert.throws(() => recordSeoDraftReview(reviewer, draft.jobId, { revision: changed.revision, claimId: changed.review[0]!.detail.id, decision: "confirmed", note: "再確認" }), /作り直して/)
+  const restored = await recheckSeoDraftSource(reviewer, draft.jobId, { revision: changed.revision }, fetchHtml())
+  assert.equal(restored.origin.status, "changed"); assert.equal(restored.canReview, false)
+  assert.deepEqual(restored.document, draft.document)
+})
+test("unlinked, unchecked, expired and failed source checks cannot confirm claims; failure can recover with an identical fetch", async () => {
+  const { ctx, input } = await setup(); const draft = await createSeoMetadataDraft(ctx, input)
+  const reviewer = { ...ctx, user: { id: "engineer", displayName: "技術担当", roles: ["technical-reviewer" as const] } }
+  assert.equal(getSeoDraftReview(reviewer, draft.jobId)?.canReview, false)
+  const opened = await checked(ctx, draft.jobId)
+  const request = { revision: opened.revision, claimId: opened.review[0]!.detail.id, decision: "confirmed", note: "確認" }
+  const later = { ...reviewer, now: "2026-10-10T15:31:00.000Z" }
+  assert.equal(getSeoDraftReview(later, draft.jobId)?.origin.status, "expired")
+  assert.throws(() => recordSeoDraftReview(later, draft.jobId, request), /再確認/)
+  const failed = await recheckSeoDraftSource(reviewer, draft.jobId, { revision: opened.revision }, (async () => { throw new Error("private network error") }) as typeof fetch)
+  assert.equal(failed.origin.status, "failed"); assert.equal(failed.canReview, false)
+  const recovered = await recheckSeoDraftSource(reviewer, draft.jobId, { revision: failed.revision }, fetchHtml())
+  assert.equal(recovered.origin.status, "unchanged"); assert.equal(recovered.canReview, true)
+  const old = await createSeoMetadataDraft(ctx, input)
+  rmSync(path.join(ctx.dataRoot, "seo-drafts", old.jobId, "origin.json"))
+  assert.equal(getSeoDraftReview(reviewer, old.jobId)?.origin.status, "unlinked")
+  assert.equal(getSeoDraftReview(reviewer, old.jobId)?.canReview, false)
+  await assert.rejects(() => recheckSeoDraftSource(reviewer, old.jobId, { revision: getSeoDraftReview(reviewer, old.jobId)!.revision }, fetchHtml()), /未紐付け/)
+})
+test("an in-flight recheck cannot overwrite a concurrent technical decision", async () => {
+  const { ctx, input } = await setup(); const draft = await createSeoMetadataDraft(ctx, input)
+  const opened = await checked(ctx, draft.jobId)
+  const reviewer = { ...ctx, user: { id: "engineer", displayName: "技術担当", roles: ["technical-reviewer" as const] } }
+  let resolveFetch!: (response: Response) => void
+  const deferred = new Promise<Response>(resolve => { resolveFetch = resolve })
+  const inFlight = recheckSeoDraftSource(reviewer, draft.jobId, { revision: opened.revision }, (async () => deferred) as typeof fetch)
+  recordSeoDraftReview(reviewer, draft.jobId, { revision: opened.revision, claimId: opened.review[0]!.detail.id, decision: "confirmed", note: "照合済み" })
+  resolveFetch(new Response(sourceHtml, { headers: { "content-type": "text/html" } }))
+  await inFlight
+  assert.equal(getSeoDraftReview(reviewer, draft.jobId)?.history.length, 1)
+  assert.equal(getSeoDraftReview(reviewer, draft.jobId)?.origin.status, "unchanged")
+  const latest = getSeoDraftReview(reviewer, draft.jobId)!
+  const driftFetch = new Promise<Response>(resolve => { resolveFetch = resolve })
+  const driftCheck = recheckSeoDraftSource(reviewer, draft.jobId, { revision: latest.revision }, (async () => driftFetch) as typeof fetch)
+  recordSeoDraftReview(reviewer, draft.jobId, { revision: latest.revision, claimId: latest.review[0]!.detail.id, decision: "confirmed", note: "再照合済み" })
+  resolveFetch(new Response(sourceHtml + "<!--changed-->", { headers: { "content-type": "text/html" } }))
+  const changed = await driftCheck
+  assert.equal(changed.history.length, 2)
+  assert.equal(changed.origin.status, "changed")
+  assert.equal(changed.canReview, false)
+})
+
+test("parallel source checks never replace detected drift with an older matching result", async () => {
+  for (const firstChanges of [false, true]) {
+    const { ctx, input } = await setup(); const draft = await createSeoMetadataDraft(ctx, input)
+    const opened = await checked(ctx, draft.jobId)
+    let resolveFetch!: (response: Response) => void
+    const deferred = new Promise<Response>(resolve => { resolveFetch = resolve })
+    const first = recheckSeoDraftSource(ctx, draft.jobId, { revision: opened.revision }, (async () => deferred) as typeof fetch)
+    await recheckSeoDraftSource(ctx, draft.jobId, { revision: opened.revision }, fetchHtml(firstChanges ? sourceHtml : sourceHtml + "<!--new change-->"))
+    resolveFetch(new Response(firstChanges ? sourceHtml + "<!--older change-->" : sourceHtml, { headers: { "content-type": "text/html" } }))
+    if (firstChanges) await first
+    else await assert.rejects(() => first, /別の原本確認/)
+    assert.equal(getSeoDraftReview(ctx, draft.jobId)?.origin.status, "changed")
+    assert.equal(getSeoDraftReview(ctx, draft.jobId)?.canReview, false)
+  }
 })

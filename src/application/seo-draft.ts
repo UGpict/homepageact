@@ -9,6 +9,8 @@ import { findConfidentialLeaks } from "../numbers.ts"
 import { renderAchievement } from "../render.ts"
 import { toJobView } from "./job-view.ts"
 import type { AppContext } from "./service.ts"
+import { getSeoPublicSource } from "./seo-source.ts"
+import { isFreshSourceTime } from "./seo-source-binding.ts"
 
 export const MetadataPatchSchema = z.object({
   title: z.string().trim().min(1).max(200).optional(),
@@ -22,6 +24,7 @@ const RequestSchema = z.object({
   proposal: MetadataPatchSchema,
   mode: z.enum(["manual", "ai"]),
   publicSourceConfirmed: z.literal(true),
+  sourceId: z.string().regex(/^source-[a-f0-9]{16}$/),
 }).strict()
 export type MetadataGenerator = (payload: TextEditPayload) => Promise<unknown>
 export type SeoMetadataDraft = {
@@ -31,6 +34,7 @@ export type SeoMetadataDraft = {
   preserved: { images: number; points: number; relatedLinks: number; facts: true };
   review: ReturnType<typeof toJobView>["claims"];
   phaseLabel: string;
+  originSourceId: string | null;
 }
 
 /** Limited to metadata, and saved under a job-specific draft directory. Never writes the site pack. */
@@ -38,13 +42,16 @@ export async function createSeoMetadataDraft(ctx: AppContext, input: unknown, ge
   const request = RequestSchema.parse(input)
   const doc = request.document
   if (request.url !== `https://www.macsystems.co.jp/ts/achievement/${doc.generated.slug}/`) throw new Error("対象URLとJSONのslugが一致しません。")
+  const origin = getSeoPublicSource(ctx.dataRoot, request.sourceId)
+  if (!origin || origin.snapshot.url !== request.url) throw new Error("対象ページの公開HTMLを取得してから下書きを作成してください。")
+  const now = ctx.now ?? new Date().toISOString()
+  if (!isFreshSourceTime(origin.snapshot.fetchedAt, now)) throw new Error("公開HTMLの取得から30分を過ぎています。再取得してください。")
   const pack = loadSitePack(ctx.packRoot)
   // Scan the original before it can enter a remote generation payload.
   if (findConfidentialLeaks([JSON.stringify(request), renderAchievement(doc, pack)], ctx.confidentialTerms).length) throw new Error("機密語を含むため処理できません。公開用データと指示を確認してください。")
   if (request.mode === "ai" && !generate) throw new Error("外部生成APIが設定されていません。修正案を入力する方式を選んでください。")
   const jobId = `job-${randomBytes(4).toString("hex")}`
   const root = path.join(ctx.dataRoot, "seo-drafts", jobId)
-  const now = ctx.now ?? new Date().toISOString()
   try {
     const result = await runTextEdit({
       root, pack, jobId, now, requestedBy: ctx.user.id,
@@ -65,10 +72,11 @@ export async function createSeoMetadataDraft(ctx: AppContext, input: unknown, ge
     const summary: SeoMetadataDraft = {
       document: result.doc, jobId, mode: request.mode, sourceUrl: request.url, changes,
       preserved: { images: doc.facts.images.length, points: doc.generated.points.length, relatedLinks: doc.generated.relatedLinks.length, facts: true },
-      review: view.claims, phaseLabel: view.phaseLabel,
+      review: view.claims, phaseLabel: "公開ページの再確認待ち", originSourceId: origin.snapshot.id,
     }
     mkdirSync(root, { recursive: true })
     writeFileSync(path.join(root, "source.json"), JSON.stringify(doc, null, 2) + "\n")
+    writeFileSync(path.join(root, "origin.json"), JSON.stringify(origin) + "\n")
     writeFileSync(path.join(root, "summary.json"), JSON.stringify(summary, null, 2) + "\n")
     return summary
   } catch (error) { rmSync(root, { recursive: true, force: true }); throw error }
