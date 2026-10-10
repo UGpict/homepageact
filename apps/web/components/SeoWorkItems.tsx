@@ -1,5 +1,6 @@
 "use client"
 import { useState, type FormEvent } from "react"
+import SeoDraftForm from "./SeoDraftForm"
 import { exportBrief, taskStatuses, updateTask } from "../../../src/seo/tasks"
 import type { SeoTask, TaskPlan, Workspace } from "../../../src/seo/model"
 
@@ -46,6 +47,8 @@ export default function SeoWorkItems({ workspace, disabled, onSave, onError }: {
       <p>{t.snapshot.reason}</p><p><strong>最初の確認：</strong>{t.snapshot.next}</p>
       <details><summary>選んだ時点の検索根拠</summary><p>{t.snapshot.previousStart}〜{t.snapshot.previousEnd} → {t.snapshot.currentStart}〜{t.snapshot.currentEnd}<br />{t.snapshot.filters}</p><p>クリック {t.snapshot.previous.clicks} → {t.snapshot.current.clicks} / 表示回数 {t.snapshot.previous.impressions} → {t.snapshot.current.impressions} / 平均順位 {t.snapshot.previous.position ?? "不明"} → {t.snapshot.current.position ?? "不明"}</p><a href={t.page.url} target="_blank" rel="noreferrer">対象ページを見る</a></details>
       <div className="actions"><button className="secondary" disabled={disabled} onClick={() => setSelected(t.id)}>調査・準備を記入</button><button className="secondary" disabled={disabled || !["brief-ready", "done"].includes(t.status)} onClick={() => { try { downloadBrief(t) } catch (e) { onError(e) } }}>制作指示を保存</button></div>
+      {["brief-ready", "done"].includes(t.status) && !t.demo && t.page.kind === "achievement" && <details><summary>下書き作成に進む</summary><SeoDraftForm key={t.updatedAt} task={t} /></details>}
+      {["brief-ready", "done"].includes(t.status) && (t.demo || t.page.kind !== "achievement") && <p className="hint">画面からの下書き作成は実績ページの実作業が対象です。デモや他の種類は制作指示を保存して進めてください。</p>}
     </li>)}</ul>
     {task && <form className="form seo-editor" key={`${workspace.demo}-${task.id}-${task.updatedAt}`} onSubmit={save}>
       <fieldset disabled={disabled}><legend>{task.page.title} の調査・準備</legend>

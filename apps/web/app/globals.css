@@ -294,3 +294,6 @@ dd { margin: 0 0 8px; }
 
 .seo-work-card { padding: 16px; border: 1px solid #d5d9e0; border-radius: 8px; overflow-wrap: anywhere; }
 .seo-work-card .actions { margin-top: 12px; }
+.seo-work-card, .seo-work-card .form, .seo-work-card fieldset { min-width: 0; }
+.seo-work-card .seo-editor { padding: 12px; }
+.seo-work-card input[type="file"] { width: 100%; }
