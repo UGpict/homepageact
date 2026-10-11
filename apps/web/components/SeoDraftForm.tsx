@@ -38,7 +38,7 @@ export default function SeoDraftForm({ task }: { task: SeoTask }) {
   return <div className="seo-editor">
     <h3>タイトル・見出し・説明文の下書きを作る</h3>
     <p className="hint">対象ページの構造化JSONが必要です。元データと入力した指示・修正案をアプリのサーバーへ送信し、下書きとして保存します。検索CSVや作業メモ全体は送信しません。</p>
-    <label>対象ページの公開用JSON<input type="file" accept=".json,application/json" disabled={busy} onChange={e => { void read(e.target.files?.[0]) }} /></label>
+    <p>このページの元データ（JSON）を運用担当者から受け取ってください。手元にない場合は「制作指示を保存」で担当者に依頼できます。</p><label>対象ページの公開用JSON<input type="file" accept=".json,application/json" disabled={busy} onChange={e => { void read(e.target.files?.[0]) }} /></label>
     <SeoSourceImport url={task.page.url} document={document} onSource={s => setSourceId(s?.id ?? null)} />
     {error && <p className="error" role="alert">{error}</p>}
     {document && <form className="form" onSubmit={submit} key={document.generated.slug}>
@@ -46,9 +46,9 @@ export default function SeoDraftForm({ task }: { task: SeoTask }) {
         <label>タイトル案<input name="title" type="text" maxLength={200} defaultValue={document.generated.title} /></label>
         <label>H1案<input name="h1" type="text" maxLength={200} defaultValue={document.generated.h1} /></label>
         <label>説明文案<textarea name="description" maxLength={500} defaultValue={document.generated.description} /></label>
-        <label>作成指示（送信する内容を確認）<textarea name="instruction" maxLength={3000} required defaultValue={`対象クエリ：${task.plan.query}\n目的：${task.plan.goal}\nタイトル・H1・説明文だけを提案してください。事実や数値を補わず、本文・写真・表は変更しないでください。`} /></label>
+        <details><summary>文章の作り方を変える（任意）</summary><p>通常は入力した文章をそのまま下書きにします。外部AIは接続済みの場合だけ選べます。</p><label>作成指示（送信する内容を確認）<textarea name="instruction" maxLength={3000} required defaultValue={`対象クエリ：${task.plan.query}\n目的：${task.plan.goal}\nタイトル・H1・説明文だけを提案してください。事実や数値を補わず、本文・写真・表は変更しないでください。`} /></label>
         <label>作成方法<select name="mode" defaultValue="manual"><option value="manual">入力した修正案を下書きにする</option><option value="ai">設定済みの外部AIで文章案を作る</option></select></label>
-        <p className="hint">外部AIを選ぶ場合、現在の生成文章と上の指示を設定済みAPIに送ります。API未設定の場合は作成できません。根拠・写真の事実データや作業メモはAIへの送信対象に含めません。</p>
+        <p className="hint">外部AIを選ぶ場合、現在の生成文章と上の指示を設定済みAPIに送ります。API未設定の場合は作成できません。根拠・写真の事実データや作業メモはAIへの送信対象に含めません。</p></details>
         <label className="choice"><input type="checkbox" name="confirmed" required />JSONは公開用の情報で、写真・数値は自社検証に基づき、顧客の機密情報を含まないことを確認しました。</label>
         {!sourceId && <p className="hint">先に「公開ページを取得」で原本を保存してください。取得から30分以内の原本を下書きに紐付けます。</p>}
         <button disabled={busy || !sourceId}>{busy ? "下書きを作成中…" : "修正案の下書きを作成"}</button>

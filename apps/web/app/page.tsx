@@ -12,25 +12,18 @@ export default function HomePage() {
   return (
     <section className="panel">
       <h1>何をしますか？</h1>
-      <p className="lede">依頼の種類を選んでください。文章の書き方を指定する必要はありません。</p>
+      <p className="lede">やりたいことを選んでください。初めての方は「検索データから改善を考える」で練習できます。</p>
       <ul className="task-list">
-        {tasks.map((task) => (
+        {tasks.filter(task => task.ready).map((task) => (
           <li key={task.label}>
-            {task.ready ? (
-              <Link className="task" href={task.href}>
-                <span aria-hidden="true">＋</span>
-                {task.label}
-              </Link>
-            ) : (
-              <button type="button" className="task" disabled>
-                <span aria-hidden="true">＋</span>
-                {task.label}
-                <small>準備中</small>
-              </button>
-            )}
+            <Link className="task" href={task.href}>
+              <span aria-hidden="true">＋</span>{task.label}
+            </Link>
           </li>
         ))}
       </ul>
+      <p><Link href="/seo/help">初めての方へ：使い方を見る</Link></p>
+      <details><summary>これから追加する機能</summary><ul>{tasks.filter(task => !task.ready).map(task => <li key={task.label}>{task.label}（準備中）</li>)}</ul></details>
     </section>
   )
 }

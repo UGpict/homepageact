@@ -52,7 +52,7 @@ npm run sitebot -- prepare-image --file photo.jpg --kind achievement --root out
 
 ## SEOレビュー
 
-画面を使う方は、[SEO改善アプリ 利用ガイド](docs/seo-user-guide.md) を参照してください。初めての練習から、技術確認・引き渡しまでを説明しています。
+まず [短い使い方](docs/seo-quickstart.md) で1件試してください。詳しい操作や技術確認・引き渡しは [SEO改善アプリ 利用ガイド](docs/seo-user-guide.md) を参照できます。画面内にも `/seo/help` の案内があります。
 
 トップの「検索データから改善を考える」（`/seo`）から、ページ台帳、Search Consoleのページ別CSVの2期間比較、根拠付き改善候補を利用できます。CSVと台帳はブラウザ内に保存し、外部AIへ送信しません。「架空データで試す」で入力なしでも確認できます。
 
