@@ -299,3 +299,12 @@ dd { margin: 0 0 8px; }
 .seo-work-card input[type="file"] { width: 100%; }
 .seo-source-import { padding: 12px; border: 1px solid #d5d9e0; border-radius: 8px; min-width: 0; }
 .seo-source-import fieldset, .seo-dashboard .preserve, .seo-dashboard dd { min-width: 0; overflow-wrap: anywhere; }
+
+/* Keep each SEO step on one screen; hidden panels retain unfinished input. */
+[hidden] { display: none !important; }
+.seo-steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.seo-steps button { white-space: normal; min-height: 48px; }
+.seo-steps button[aria-pressed="true"] { background: #173f60; color: white; border-color: #173f60; }
+.seo-dashboard summary { cursor: pointer; padding: 8px 0; }
+.seo-dashboard blockquote { margin: 12px 0; padding: 12px; border-left: 3px solid #9eafbd; background: #f2f6fa; }
+@media (max-width: 640px) { .seo-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
