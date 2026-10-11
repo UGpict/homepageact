@@ -1,24 +1,10 @@
 "use client"
-import { useState, type FormEvent } from "react"
+import { useState } from "react"
+import SeoPreparationGuide from "./SeoPreparationGuide"
 import SeoDraftForm from "./SeoDraftForm"
 import { exportBrief, taskStatuses, updateTask } from "../../../src/seo/tasks"
 import type { SeoTask, TaskPlan, Workspace } from "../../../src/seo/model"
 
-const fields: Array<[keyof Omit<TaskPlan, "evidenceReady">, string, string]> = [
-  ["goal", "この改善で増やしたい相談", "例：SiCの断面作製条件についての見積相談"],
-  ["query", "確認した検索語（クエリ）", "ページの平均順位から推測せず、対象URLのクエリを確認する"],
-  ["querySource", "検索語を調べた場所・日付", "例：Search ConsoleでこのURLを絞り込み / 対象期間 / 確認日"],
-  ["research", "調査結果・変更したい箇所", "検索意図、上位ページ、既存ページの不足、残すべき要素"],
-  ["experiment", "追加の自社検証計画", "試料・条件・変える因子・比較条件・測定方法。不要な場合は理由"],
-  ["photos", "写真・図の準備", "比較写真、スケール、撮影条件。顧客の画像は使用しない"],
-  ["evidence", "説明が正しいと分かる資料", "自社検証の記録ID、条件、観察結果、写真IDや公開出典。機密資料は入力しない"],
-  ["limitations", "確認できたこと・まだ分からないこと", "今回の条件で言えること、一般化できないこと、未確認のこと"],
-]
-const fieldGroups: Array<{ heading: string; fields: typeof fields }> = [
-  { heading: "まず、何を変えたいですか？", fields: fields.slice(0, 4) },
-  { heading: "説明を裏付ける資料はありますか？", fields: fields.slice(4) },
-]
-const limits: Record<string, number> = { goal: 1000, query: 200, querySource: 1000, research: 4000, experiment: 2000, photos: 2000, evidence: 4000, limitations: 2000 }
 function downloadBrief(task: SeoTask) {
   const url = URL.createObjectURL(new Blob([exportBrief(task)], { type: "text/markdown;charset=utf-8" }))
   const a = document.createElement("a"); a.href = url; a.download = `${task.demo ? "demo-" : ""}${task.id}-brief.md`; a.click()
@@ -31,13 +17,10 @@ export default function SeoWorkItems({ workspace, disabled, onSave, onError }: {
   const [showFinished, setShowFinished] = useState(false)
   const task = workspace.tasks.find(t => t.id === selected)
   const tasks = workspace.tasks.filter(t => showFinished || !["done", "cancelled"].includes(t.status)).slice().reverse()
-  function save(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
+  function save(plan: TaskPlan, status: SeoTask["status"]) {
     if (!task) return
-    const data = new FormData(event.currentTarget)
-    const plan = Object.fromEntries(fields.map(([name]) => [name, data.get(name)])) as Omit<TaskPlan, "evidenceReady">
     try {
-      onSave(updateTask(workspace, task.id, { ...plan, evidenceReady: data.get("evidenceReady") === "on" }, data.get("status") as SeoTask["status"], new Date().toISOString()), "作業内容を保存しました。")
+      onSave(updateTask(workspace, task.id, plan, status, new Date().toISOString()), status === "brief-ready" ? "準備がそろいました。制作指示の保存や下書き作成へ進めます。" : "作業内容を保存しました。")
       setSelected(null)
     } catch (e) { onError(e) }
   }
@@ -54,16 +37,6 @@ export default function SeoWorkItems({ workspace, disabled, onSave, onError }: {
       {["brief-ready", "done"].includes(t.status) && !t.demo && t.page.kind === "achievement" && <details><summary>下書き作成に進む</summary><SeoDraftForm key={t.updatedAt} task={t} /></details>}
       {["brief-ready", "done"].includes(t.status) && (t.demo || t.page.kind !== "achievement") && <p className="hint">画面からの下書き作成は実績ページの実作業が対象です。デモや他の種類は制作指示を保存して進めてください。</p>}
     </li>)}</ul>
-    {task && <form className="form seo-editor" key={`${workspace.demo}-${task.id}-${task.updatedAt}`} onSubmit={save}>
-      <fieldset disabled={disabled}><legend>{task.page.title} の調査・準備</legend>
-        <p className="hint">入力は制作資料として扱います。公開用の写真・数値は自社検証に基づくものを使い、顧客名や機密情報は入力しないでください。</p>
-        <p>分かるところから記入し、途中でも保存できます。</p>
-        {fieldGroups.map(group => <section key={group.heading}><h3>{group.heading}</h3>{group.fields.map(([name, label, hint]) => <label key={name}>{label}<textarea name={name} maxLength={limits[name]} defaultValue={task.plan[name]} placeholder={hint} /></label>)}</section>)}
-        <label className="choice"><input type="checkbox" name="evidenceReady" defaultChecked={task.plan.evidenceReady} />必要な根拠・写真・検証記録が揃い、参照先を記入しました。</label>
-        <label>作業の状態<select name="status" defaultValue={task.status}>{Object.entries(taskStatuses).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-        <p className="hint">「下書き準備完了」には目的・クエリと確認元・調査結果・根拠・適用範囲の記入が必要です。技術確認や公開承認は、下書き作成後に既存の手順で行います。</p>
-        <div className="actions"><button>作業を保存</button><button type="button" className="secondary" onClick={() => setSelected(null)}>キャンセル</button></div>
-      </fieldset>
-    </form>}
+    {task && <SeoPreparationGuide key={`${workspace.demo}-${task.id}-${task.updatedAt}`} task={task} disabled={disabled} onSave={save} onCancel={()=>setSelected(null)} />}
   </section>
 }
