@@ -8,6 +8,17 @@ export default function SeoDraftReview({ initial, reviewerLabel }: { initial: Dr
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
   const [notice, setNotice] = useState("")
+  async function handoff() {
+    setBusy(true); setError(""); setNotice("")
+    try {
+      const response = await fetch(`/api/seo/drafts/${draft.jobId}/handoff`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ revision: draft.revision }) })
+      const body = await response.json()
+      if (!response.ok || !body.ok) throw new Error(body.error ?? "書き出せませんでした。")
+      const url = URL.createObjectURL(new Blob([JSON.stringify(body.handoff, null, 2)], { type: "application/json" }))
+      const a = document.createElement("a"); a.href = url; a.download = `${draft.document.generated.slug}-seo-handoff.json`; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000)
+      setNotice("引き渡しデータを書き出しました。本番ファイルは変更していません。")
+    } catch (e) { setError(e instanceof Error ? e.message : "書き出せませんでした。") } finally { setBusy(false) }
+  }
   async function recheck() {
     setBusy(true); setError(""); setNotice("")
     try {
@@ -39,6 +50,11 @@ export default function SeoDraftReview({ initial, reviewerLabel }: { initial: Dr
         const url = URL.createObjectURL(new Blob([JSON.stringify(draft.document, null, 2)], { type: "application/json" }))
         const a = document.createElement("a"); a.href = url; a.download = `${draft.document.generated.slug}-seo-draft.json`; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000)
       }}>修正案JSONを保存</button><p className="hint">ダウンロードしたJSONは下書きのままです。確認記録はサーバーに保存され、JSONに公開承認を付けることはありません。</p>
+    </section>
+    <section className="panel"><h2>本番側への引き渡し</h2>
+      <p>技術確認済みの修正案・元JSON・確認根拠をまとめて保存します。依頼者が書き出し、本番側で元データとの一致を検証してください。</p>
+      <button disabled={busy || !draft.canHandoff} onClick={() => { void handoff() }}>確認済みの引き渡しデータを保存</button>
+      <p className="hint">全項目の技術確認と30分以内の原本確認が必要です。このデータは公開承認ではありません。本番ソースがこのJSON形式に対応していない場合は個別の接続が必要です。</p>
     </section>
     <section className="panel"><h2>公開原本の変更確認</h2>
       <p className="hint">公開HTML全体の一致を確認します。技術確認の前に再取得し、一致した確認から30分以内に記録してください。写真ファイルの中身やJavaScript実行後の変更は判定しません。</p>

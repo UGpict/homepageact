@@ -1,5 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"
+import { verifySeoHandoff } from "./seo-handoff.ts"
 import { ApprovalStore } from "./approval.ts"
 import { HarnessError } from "./errors.ts"
 import { evaluateMerge } from "./review.ts"
@@ -54,6 +55,12 @@ async function main(): Promise<void> {
     return
   }
 
+  if (command === "verify-seo-handoff") {
+    const result = verifySeoHandoff(JSON.parse(readFileSync(required(args, "--file"), "utf8")), required(args, "--root"))
+    console.log(JSON.stringify(result, null, 2))
+    return
+  }
+
   if (command === "approve") {
     const root = flag(args, "--root") ?? "out"
     const sha = required(args, "--sha")
@@ -90,7 +97,7 @@ async function main(): Promise<void> {
 
   throw new HarnessError(
     "USAGE",
-    "sitebot run-fixture bga --root out | approve --sha --role --by | can-merge --sha --job",
+    "sitebot verify-seo-handoff --file package.json --root target-repo | run-fixture bga --root out | approve --sha --role --by | can-merge --sha --job",
   )
 }
 
