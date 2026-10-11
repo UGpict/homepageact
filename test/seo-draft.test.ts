@@ -1,32 +1,13 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { mkdtempSync, readFileSync, existsSync, readdirSync, writeFileSync, rmSync, mkdirSync, symlinkSync } from "node:fs"
+import { readFileSync, existsSync, readdirSync, writeFileSync, rmSync, mkdirSync, symlinkSync } from "node:fs"
 import path from "node:path"
-import { tmpdir } from "node:os"
-import { fileURLToPath } from "node:url"
 import { createSeoMetadataDraft, seoMetadataGeneratorFromEnv } from "../src/application/seo-draft.ts"
-import { mockAchievementProvider } from "../src/application/provider.ts"
-import { runAchievementJob } from "../src/run-job.ts"
-import { loadSitePack } from "../src/sitepack.ts"
 import { exportSeoDraftHandoff, getSeoDraftReview, listSeoDrafts, recordSeoDraftReview, recheckSeoDraftSource } from "../src/application/seo-draft-review.ts"
 import { importSeoPublicSource } from "../src/application/seo-source.ts"
 import { verifySeoHandoff, validateSeoHandoff } from "../src/seo-handoff.ts"
 import { currentUserFromEnv } from "../src/application/user.ts"
-const packRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
-const now = "2026-10-10T15:00:00.000Z"
-const sourceHtml = "<!doctype html><html><head><title>公開原本</title></head><body><h1>BGA検証</h1></body></html>"
-const fetchHtml = (html = sourceHtml) => (async () => new Response(html, { headers: { "content-type": "text/html" } })) as typeof fetch
-async function checked(ctx: Awaited<ReturnType<typeof setup>>["ctx"], jobId: string) {
-  return recheckSeoDraftSource(ctx, jobId, { revision: getSeoDraftReview(ctx, jobId)!.revision }, fetchHtml())
-}
-async function setup() {
-  const dataRoot = mkdtempSync(path.join(tmpdir(), "seo-draft-"))
-  const ctx = { packRoot, dataRoot, user: { id: "requester", displayName: "依頼者", roles: ["requester" as const] }, provider: mockAchievementProvider(), confidentialTerms: [], now }
-  const created = await runAchievementJob({ root: path.join(dataRoot, "original"), pack: loadSitePack(packRoot), jobId: "source", now, today: "2026-10-10", requestedBy: "requester", facts: JSON.parse(readFileSync(path.join(packRoot, "fixtures/bga/facts.json"), "utf8")), generate: async () => JSON.parse(readFileSync(path.join(packRoot, "fixtures/bga/model-output.json"), "utf8")) })
-  const snapshot = await importSeoPublicSource(dataRoot, { url: "https://www.macsystems.co.jp/ts/achievement/bga/" }, fetchHtml(), now)
-  const input = { url: snapshot.url, sourceId: snapshot.id, document: created.doc, proposal: { title: created.doc.generated.title + "｜検討用" }, instruction: "タイトルだけを検討用に変更", mode: "manual", publicSourceConfirmed: true }
-  return { ctx, input, created }
-}
+import { setup, checked, now, sourceHtml, fetchHtml } from "./helpers/seo-fixture.ts"
 test("metadata draft uses the harness, keeps all facts and content, and never edits its source", async () => {
   const { ctx, input, created } = await setup()
   const original = readFileSync(path.join(ctx.dataRoot, "original", created.relativePath), "utf8")

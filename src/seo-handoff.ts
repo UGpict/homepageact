@@ -3,7 +3,7 @@ import path from "node:path"
 import { z } from "zod"
 import { PublicAchievementSchema } from "./schema.ts"
 import { hashText } from "./review.ts"
-import { MetadataPatchSchema } from "./application/seo-draft.ts"
+import { MetadataPatchSchema, applyMetadataProposal } from "./seo-metadata.ts"
 import { isFreshSourceTime } from "./application/seo-source-binding.ts"
 const Hash = z.string().regex(/^[a-f0-9]{64}$/)
 export const SeoHandoffSchema = z.object({
@@ -24,7 +24,7 @@ export function validateSeoHandoff(input: unknown): SeoHandoff {
   const slug = pack.original.generated.slug
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) || pack.targetPath !== `content/achievements/${slug}.json` || pack.sourceUrl !== `https://www.macsystems.co.jp/ts/achievement/${slug}/`) throw new Error("対象パスとページが一致しません。")
   if (pack.exportedBy !== pack.requestedBy || pack.originalHash !== achievementHash(pack.original)) throw new Error("原本または依頼者が一致しません。")
-  const proposed = { ...pack.original, generated: { ...pack.original.generated, ...pack.proposal } }
+  const proposed = applyMetadataProposal(pack.original, pack.proposal)
   if (pack.proposedHash !== achievementHash(proposed) || pack.proposedHash === pack.originalHash) throw new Error("修正案の識別情報が一致しません。")
   if (!isFreshSourceTime(pack.publicSource.checkedAt, pack.exportedAt)) throw new Error("書き出し時の公開原本確認が期限切れです。")
   const ids = new Set<string>()

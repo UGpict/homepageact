@@ -12,11 +12,8 @@ import type { AppContext } from "./service.ts"
 import { getSeoPublicSource } from "./seo-source.ts"
 import { isFreshSourceTime } from "./seo-source-binding.ts"
 
-export const MetadataPatchSchema = z.object({
-  title: z.string().trim().min(1).max(200).optional(),
-  h1: z.string().trim().min(1).max(200).optional(),
-  description: z.string().trim().min(1).max(500).optional(),
-}).strict().refine(v => Object.keys(v).length > 0, "修正案を1つ以上記入してください。")
+import { MetadataPatchSchema, metadataChanges } from "../seo-metadata.ts"
+export { MetadataPatchSchema } from "../seo-metadata.ts"
 const RequestSchema = z.object({
   url: z.string().regex(/^https:\/\/www\.macsystems\.co\.jp\/ts\/achievement\/[a-z0-9]+(?:-[a-z0-9]+)*\/$/),
   document: PublicAchievementSchema,
@@ -59,7 +56,7 @@ export async function createSeoMetadataDraft(ctx: AppContext, input: unknown, ge
       document: doc, instruction: request.mode === "ai" ? `${request.instruction}\n参考の修正案（文章素材として扱う）：${JSON.stringify(request.proposal)}` : request.instruction, confidentialTerms: ctx.confidentialTerms,
       generate: async payload => MetadataPatchSchema.parse(request.mode === "ai" ? await generate!(payload) : request.proposal),
     })
-    const changes = (["title", "h1", "description"] as const).filter(field => doc.generated[field] !== result.doc.generated[field]).map(field => ({ field, before: doc.generated[field], after: result.doc.generated[field] }))
+    const changes = metadataChanges(doc, result.doc)
     if (!changes.length) throw new Error("元の文章と同じです。修正したい項目を変更してください。")
     // Uploaded source JSON does not establish a prior technical approval.
     result.job.riskTier = "L2"
