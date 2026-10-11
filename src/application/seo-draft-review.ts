@@ -11,6 +11,7 @@ import { StoredJob } from "./repository.ts"
 import type { AppContext } from "./service.ts"
 import type { SeoMetadataDraft } from "./seo-draft.ts"
 import { readBoundSource, readSourceCheck, sourceBindingView, writeSourceCheck, isFreshSourceTime, type SourceBindingView } from "./seo-source-binding.ts"
+import { metadataChanges, applyMetadataProposal } from "../seo-metadata.ts"
 import { achievementHash, validateSeoHandoff } from "../seo-handoff.ts"
 import { importSeoPublicSource } from "./seo-source.ts"
 
@@ -71,7 +72,7 @@ function readState(ctx: Context, jobId: string) {
   if (origin.status !== "unchanged") reviewedJob = { ...reviewedJob, claims: reviewedJob.claims.map(c => ({ ...c, status: "pending" })) }
   const view = toJobView(reviewedJob, document, loadSitePack(ctx.packRoot))
   const sourceLabels = { unlinked: "公開原本が未紐付け", unchecked: "公開ページの再確認待ち", changed: "公開ページが変更されています", failed: "公開ページを再確認できません", expired: "公開ページの確認期限切れ", unchanged: view.phaseLabel }
-  const changes = (["title", "h1", "description"] as const).filter(f => source.generated[f] !== document.generated[f]).map(field => ({ field, before: source.generated[field], after: document.generated[field] }))
+  const changes = metadataChanges(source, document)
   const detail: SeoDraftReview = {
     document, jobId, sourceUrl: `https://www.macsystems.co.jp/ts/achievement/${document.generated.slug}/`,
     mode, changes,
@@ -145,7 +146,7 @@ export function exportSeoDraftHandoff(ctx: Context, jobId: string, input: unknow
   if (request.revision !== state.detail.revision) throw new Error("確認記録が更新されています。再読み込みしてください。")
   const original = PublicAchievementSchema.parse(json(path.join(state.root, "source.json")))
   const proposal = Object.fromEntries(state.detail.changes.map(c => [c.field, c.after]))
-  const proposed = { ...original, generated: { ...original.generated, ...proposal } }
+  const proposed = applyMetadataProposal(original, proposal)
   const baseline = state.detail.origin.baseline!
   const reviews = state.detail.review.map(c => {
     const entry = [...state.audit.entries].reverse().find(e => e.claimId === c.detail.id)!
